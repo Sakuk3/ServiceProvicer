@@ -1,12 +1,12 @@
 import { defineService } from "../../registry";
 import { BasicNetworkService } from "./BasicNetworkService";
 
-const serviceName = "Network" as const;
+const serviceName = "Network";
 
 export const networkManifest = defineService({
   name: serviceName,
   description: "Network service",
-  dependencies: ["Logger", "Storage"] as const,
+  dependencies: ["Logger", "Storage"],
   factory: (deps) => {
     const { Logger, Storage } = deps;
     console.log(`[${serviceName}] using ${Logger.name} and ${Storage.name}`);

@@ -1,12 +1,12 @@
 import { defineService } from "../../registry";
 import { BasicNotificationService } from "./BasicNotificationService";
 
-const serviceName = "Notification" as const;
+const serviceName = "Notification";
 
 export const notificationManifest = defineService({
   name: serviceName,
   description: "Notification service",
-  dependencies: ["Logger"] as const,
+  dependencies: ["Logger"],
   factory: (deps) => {
     const { Logger } = deps;
     console.log(`[${serviceName}] using ${Logger.name}`);
