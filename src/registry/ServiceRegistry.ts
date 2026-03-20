@@ -16,15 +16,16 @@ type ServiceEntry = WaitingEntry | ReadyEntry;
 export class ServiceRegistry {
   private readonly serviceStore = new Map<ServiceKey, ServiceEntry>();
 
-  public registerService<
-    K extends ServiceKey,
-    D extends readonly ServiceKey[],
-  >(manifest: ServiceManifest<K, D>): void {
+  public registerService<K extends ServiceKey, D extends readonly ServiceKey[]>(
+    manifest: ServiceManifest<K, D>,
+  ): void {
     this.serviceStore.set(manifest.name, {
       state: "waiting",
       dependencies: manifest.dependencies,
       createInstance: () =>
-        manifest.factory(this.buildDependencies(manifest.dependencies)) as Services[ServiceKey],
+        manifest.factory(
+          this.buildDependencies(manifest.dependencies),
+        ) as Services[ServiceKey],
     });
 
     this.tryResolveAll();
@@ -40,9 +41,13 @@ export class ServiceRegistry {
     return entry.instance as Services[K];
   }
 
-  public getServiceUnsafe<K extends ServiceKey>(name: K): Services[K] | undefined {
+  public getServiceUnsafe<K extends ServiceKey>(
+    name: K,
+  ): Services[K] | undefined {
     const entry = this.serviceStore.get(name);
-    return entry?.state === "ready" ? (entry.instance as Services[K]) : undefined;
+    return entry?.state === "ready"
+      ? (entry.instance as Services[K])
+      : undefined;
   }
 
   private tryResolveAll(): void {
@@ -84,7 +89,8 @@ export class ServiceRegistry {
         throw new Error(`Dependency ${dep} not ready`);
       }
 
-      (result as Record<ServiceKey, Services[ServiceKey]>)[dep] = entry.instance;
+      (result as Record<ServiceKey, Services[ServiceKey]>)[dep] =
+        entry.instance;
     }
 
     return result;

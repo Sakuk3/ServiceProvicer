@@ -1,12 +1,11 @@
-import type { Service } from "../services/Service";
+import type { LoggerService ,NetworkService ,NotificationService ,StorageService, AuthService  } from "../services";
 
 export interface Services {
-  Logger: Service;
-  Storage: Service;
-  Network: Service;
-  Auth: Service;
-  Notification: Service;
+  Logger: LoggerService;
+  Storage: StorageService;
+  Network: NetworkService;
+  Auth: AuthService;
+  Notification: NotificationService;
 }
 
 export type ServiceKey = keyof Services;
-
