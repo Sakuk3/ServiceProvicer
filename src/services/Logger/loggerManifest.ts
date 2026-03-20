@@ -1,7 +1,9 @@
 import { defineService } from "../../registry";
 import { BasicLoggerService } from "./BasicLoggerService";
+import type { LogLevel } from "./LoggerService";
 
 const serviceName = "Logger" as const;
+const minLogLevel: LogLevel = "debug";
 
 export const loggerManifest = defineService({
   name: serviceName,
@@ -10,6 +12,6 @@ export const loggerManifest = defineService({
   factory: (deps) => {
     const { ...resolvedDeps } = deps;
     void resolvedDeps;
-    return new BasicLoggerService(serviceName);
+    return new BasicLoggerService(serviceName, minLogLevel);
   },
 });

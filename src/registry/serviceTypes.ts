@@ -1,4 +1,10 @@
-import type { LoggerService ,NetworkService ,NotificationService ,StorageService, AuthService  } from "../services";
+import type {
+  LoggerService,
+  NetworkService,
+  NotificationService,
+  StorageService,
+  AuthService,
+} from "../services";
 
 export interface Services {
   Logger: LoggerService;
