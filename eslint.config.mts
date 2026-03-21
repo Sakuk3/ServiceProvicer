@@ -22,6 +22,27 @@ export default defineConfig([
       tsdoc,
     },
     rules: {
+      "@typescript-eslint/consistent-type-imports": [
+        "error",
+        {
+          prefer: "type-imports",
+          fixStyle: "separate-type-imports",
+        },
+      ],
+      "@typescript-eslint/switch-exhaustiveness-check": "error",
+      "prefer-destructuring": [
+        "error",
+        {
+          VariableDeclarator: {
+            object: true,
+            array: false,
+          },
+          AssignmentExpression: {
+            object: true,
+            array: false,
+          },
+        },
+      ],
       "tsdoc/syntax": "error",
     },
   },
@@ -34,6 +55,17 @@ export default defineConfig([
       },
     },
     rules: {
+      "no-restricted-globals": [
+        "error",
+        {
+          name: "fdescribe",
+          message: "Avoid focused tests in committed code.",
+        },
+        {
+          name: "fit",
+          message: "Avoid focused tests in committed code.",
+        },
+      ],
       "no-restricted-properties": [
         "error",
         {

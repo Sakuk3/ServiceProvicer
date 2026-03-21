@@ -1,10 +1,9 @@
-import { ServiceKey, Services } from "./serviceTypes";
-import {
+import type { ServiceKey, Services } from "./serviceTypes";
+import type {
   CreateReadyHooksProps,
   DependencyRecord,
   FailedEntry,
   FailedServiceInfo,
-  HookExecutionError,
   HookPolicyMap,
   HookTask,
   LifecycleHookPolicy,
@@ -19,6 +18,7 @@ import {
   WaitingServiceInfo,
   WaitingEntry,
 } from "./types";
+import { HookExecutionError } from "./types";
 import type { ServiceHooks, ServiceManifest } from "./manifest";
 
 /**
@@ -164,10 +164,15 @@ export class ServiceRegistry {
     );
 
     const failures: TriggerEventFailure[] = [];
+    const getRejectedReason = (props: { reason: unknown }): unknown => {
+      const { reason } = props;
+
+      return reason;
+    };
 
     for (const result of settled) {
       if (result.status === "rejected") {
-        const reason: unknown = result.reason;
+        const reason = getRejectedReason(result as { reason: unknown });
 
         if (reason instanceof HookExecutionError) {
           failures.push({
