@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { defineService, ServiceRegistry } from "../../src/registry";
+import type { FailedServiceInfo } from "../../src/registry";
 import {
   createLoggerService,
   createNotificationService,
@@ -143,7 +144,8 @@ describe("ServiceRegistry getters", () => {
 
       const unresolvedServices = registry.getUnresolvedServices();
       const failedAuthService = unresolvedServices.find(
-        (entry) => entry.state === "failed" && entry.name === "Auth",
+        (entry): entry is FailedServiceInfo =>
+          entry.state === "failed" && entry.name === "Auth",
       );
 
       expect(registry.listReadyServices()).toEqual(["Logger"]);

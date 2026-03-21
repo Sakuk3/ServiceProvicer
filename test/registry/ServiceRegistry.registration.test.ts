@@ -172,6 +172,24 @@ describe("ServiceRegistry registration", () => {
     expect(registry.getServiceUnsafe("Network")).toBeUndefined();
     expect(registry.getServiceUnsafe("Auth")).toBeUndefined();
     expect(registry.getServiceUnsafe("Logger")).toBe(logger);
+    expect(registry.getUnresolvedServices()).toEqual(
+      expect.arrayContaining([
+        {
+          name: "Network",
+          state: "waiting",
+          dependencies: ["Auth"],
+          missingDependencies: ["Auth"],
+          cyclePath: ["Network", "Auth", "Network"],
+        },
+        {
+          name: "Auth",
+          state: "waiting",
+          dependencies: ["Network"],
+          missingDependencies: ["Network"],
+          cyclePath: ["Auth", "Network", "Auth"],
+        },
+      ]),
+    );
   });
 
   it("rejects duplicate service registration while the original service is waiting", () => {

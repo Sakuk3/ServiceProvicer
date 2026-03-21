@@ -5,8 +5,10 @@ import {
   FailedEntry,
   FailedServiceInfo,
   HookExecutionError,
-  HookMethodMap,
+  HookPolicyMap,
   HookTask,
+  LifecycleHookPolicy,
+  ResolvedLifecycleHookPolicy,
   ReadyEntry,
   ReadyHooks,
   RegistryEventName,
@@ -24,6 +26,7 @@ import type { ServiceHooks, ServiceManifest } from "./manifest";
  */
 export class ServiceRegistry {
   private readonly serviceStore = new Map<ServiceKey, ServiceEntry>();
+  private readonly hookRetryAttempts = 1;
 
   /**
    * Lists all ready service names.
@@ -63,11 +66,13 @@ export class ServiceRegistry {
 
     this.serviceStore.forEach((entry, serviceName) => {
       if (entry.state === "waiting") {
+        const cyclePath = this.getCyclePath(serviceName);
         const waitingInfo: WaitingServiceInfo = {
           name: serviceName,
           state: "waiting",
           dependencies: entry.dependencies,
           missingDependencies: this.getMissingDependencies(entry.dependencies),
+          ...(cyclePath === undefined ? {} : { cyclePath }),
         };
         unresolvedServices.push(waitingInfo);
         return;
@@ -103,7 +108,7 @@ export class ServiceRegistry {
     const waitingEntry: WaitingEntry = {
       state: "waiting",
       dependencies: manifest.dependencies,
-      hookMethods: this.toHookMethodMap(manifest.hooks),
+      hookPolicies: this.toHookPolicyMap(manifest.hooks),
       createInstance: () =>
         manifest.factory(
           this.buildDependencies(manifest.dependencies),
@@ -148,8 +153,8 @@ export class ServiceRegistry {
 
     const settled = await Promise.allSettled(
       tasks.map(async (task) => {
-        const { serviceName, hookName, run } = task;
-        await run();
+        const { serviceName, hookName } = task;
+        await this.runWithLifecyclePolicy(task);
         logger?.debug(
           "ServiceRegistry",
           `Event '${eventName}' completed for service '${serviceName}' via '${hookName}'`,
@@ -186,7 +191,6 @@ export class ServiceRegistry {
       }
     }
 
-    // Future improvement: add configurable retry policies per event/hook.
     if (failures.length > 0) {
       const failureCount = String(failures.length);
       logger?.warn(
@@ -247,7 +251,7 @@ export class ServiceRegistry {
           hooks = this.createReadyHooks({
             serviceName: name,
             instance,
-            hookMethods: entry.hookMethods,
+            hookPolicies: entry.hookPolicies,
           });
         } catch (initError: unknown) {
           const failedEntry: FailedEntry = {
@@ -330,6 +334,26 @@ export class ServiceRegistry {
   }
 
   /**
+   * Executes a hook task with optional retry policy.
+   */
+  private async runWithLifecyclePolicy(task: HookTask): Promise<void> {
+    const { retry, run, serviceName, hookName } = task;
+    const totalAttempts = retry ? this.hookRetryAttempts + 1 : 1;
+    let latestReason: unknown;
+
+    for (let attempt = 1; attempt <= totalAttempts; attempt += 1) {
+      try {
+        await run();
+        return;
+      } catch (reason: unknown) {
+        latestReason = reason;
+      }
+    }
+
+    throw new HookExecutionError(serviceName, hookName, latestReason);
+  }
+
+  /**
    * Collects executable hook tasks for the given lifecycle event.
    */
   private getHookTasks(eventName: RegistryEventName): HookTask[] {
@@ -351,13 +375,8 @@ export class ServiceRegistry {
       tasks.push({
         serviceName,
         hookName: methodName,
-        run: async () => {
-          try {
-            await run();
-          } catch (reason: unknown) {
-            throw new HookExecutionError(serviceName, methodName, reason);
-          }
-        },
+        retry: readyHook.retry,
+        run,
       });
     });
 
@@ -370,15 +389,17 @@ export class ServiceRegistry {
    * @throws Error when a declared hook is not a callable method.
    */
   private createReadyHooks(props: CreateReadyHooksProps): ReadyHooks {
-    const { serviceName, instance, hookMethods } = props;
+    const { serviceName, instance, hookPolicies } = props;
     const hooks: ReadyHooks = {};
 
-    for (const eventName of Object.keys(hookMethods) as RegistryEventName[]) {
-      const methodName = hookMethods[eventName];
+    for (const eventName of Object.keys(hookPolicies) as RegistryEventName[]) {
+      const policy = hookPolicies[eventName];
 
-      if (methodName === undefined) {
+      if (policy === undefined) {
         continue;
       }
+
+      const { method: methodName, retry } = policy;
 
       const candidate = (instance as unknown as Record<string, unknown>)[
         methodName
@@ -393,6 +414,7 @@ export class ServiceRegistry {
       const method = candidate as () => Promise<void>;
       hooks[eventName] = {
         methodName,
+        retry,
         run: () => method.call(instance),
       };
     }
@@ -401,25 +423,84 @@ export class ServiceRegistry {
   }
 
   /**
-   * Normalizes optional manifest hooks into a plain event to method map.
+   * Normalizes optional manifest hooks into lifecycle policies.
    */
-  private toHookMethodMap<K extends ServiceKey>(
+  private toHookPolicyMap<K extends ServiceKey>(
     hooks: ServiceHooks<K> | undefined,
-  ): HookMethodMap {
-    const hookMethodMap: HookMethodMap = {};
+  ): HookPolicyMap {
+    const hookPolicyMap: HookPolicyMap = {};
 
     if (hooks === undefined) {
-      return hookMethodMap;
+      return hookPolicyMap;
     }
 
     for (const eventName of Object.keys(hooks) as RegistryEventName[]) {
-      const methodName = hooks[eventName];
+      const policy = hooks[eventName];
 
-      if (methodName !== undefined) {
-        hookMethodMap[eventName] = methodName;
+      if (policy !== undefined) {
+        hookPolicyMap[eventName] = this.validateHookPolicy(eventName, policy);
       }
     }
 
-    return hookMethodMap;
+    return hookPolicyMap;
+  }
+
+  private validateHookPolicy(
+    eventName: RegistryEventName,
+    policy: LifecycleHookPolicy,
+  ): ResolvedLifecycleHookPolicy {
+    const { method, retry } = policy;
+
+    if (retry !== undefined && typeof retry !== "boolean") {
+      throw new Error(
+        `Hook '${method}' for event '${eventName}' has invalid 'retry'; expected true or false`,
+      );
+    }
+
+    return {
+      method,
+      retry: retry ?? false,
+    };
+  }
+
+  private getCyclePath(
+    startServiceName: ServiceKey,
+  ): readonly ServiceKey[] | undefined {
+    return this.findCycleFrom(startServiceName, []);
+  }
+
+  private findCycleFrom(
+    serviceName: ServiceKey,
+    path: readonly ServiceKey[],
+  ): ServiceKey[] | undefined {
+    const entry = this.serviceStore.get(serviceName);
+
+    if (entry?.state !== "waiting") {
+      return undefined;
+    }
+
+    const currentPath = [...path, serviceName];
+
+    for (const dependencyName of entry.dependencies) {
+      const dependencyEntry = this.serviceStore.get(dependencyName);
+
+      if (dependencyEntry?.state !== "waiting") {
+        continue;
+      }
+
+      const cycleStartIndex = currentPath.indexOf(dependencyName);
+
+      if (cycleStartIndex !== -1) {
+        return [...currentPath.slice(cycleStartIndex), dependencyName];
+      }
+
+      const cyclePath = this.findCycleFrom(dependencyName, currentPath);
+
+      if (cyclePath !== undefined) {
+        return cyclePath;
+      }
+    }
+
+    return undefined;
   }
 }

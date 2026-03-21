@@ -23,21 +23,35 @@ export interface TriggerEventResult {
 export interface HookTask {
   serviceName: ServiceKey;
   hookName: string;
+  retry: boolean;
   run: () => Promise<void>;
+}
+
+export interface LifecycleHookPolicy {
+  method: string;
+  retry?: boolean;
+}
+
+export interface ResolvedLifecycleHookPolicy {
+  method: string;
+  retry: boolean;
 }
 
 export interface ReadyHook {
   methodName: string;
+  retry: boolean;
   run: () => Promise<void>;
 }
 
 export type ReadyHooks = Partial<Record<RegistryEventName, ReadyHook>>;
-export type HookMethodMap = Partial<Record<RegistryEventName, string>>;
+export type HookPolicyMap = Partial<
+  Record<RegistryEventName, ResolvedLifecycleHookPolicy>
+>;
 
 export interface WaitingEntry {
   state: "waiting";
   dependencies: readonly ServiceKey[];
-  hookMethods: HookMethodMap;
+  hookPolicies: HookPolicyMap;
   createInstance: () => Services[ServiceKey];
 }
 
@@ -61,6 +75,7 @@ export interface WaitingServiceInfo {
   state: "waiting";
   dependencies: readonly ServiceKey[];
   missingDependencies: readonly ServiceKey[];
+  cyclePath?: readonly ServiceKey[];
 }
 
 export interface FailedServiceInfo {
@@ -76,7 +91,7 @@ export type UnresolvedServiceInfo = WaitingServiceInfo | FailedServiceInfo;
 export interface CreateReadyHooksProps {
   serviceName: ServiceKey;
   instance: Services[ServiceKey];
-  hookMethods: HookMethodMap;
+  hookPolicies: HookPolicyMap;
 }
 
 export class HookExecutionError extends Error {

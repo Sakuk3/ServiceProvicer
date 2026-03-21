@@ -1,5 +1,9 @@
 import type { Services } from "./serviceTypes";
-import type { DependencyRecord, RegistryEventName } from "./types";
+import type {
+  DependencyRecord,
+  LifecycleHookPolicy,
+  RegistryEventName,
+} from "./types";
 
 /**
  * Creates a service instance once all declared dependencies are ready.
@@ -30,12 +34,18 @@ type AsyncHookMethodKeys<T> = {
  *
  * This is a record where:
  * - keys are registry event names such as `"login"` or `"logout"`
- * - values are method names on `Services[ServiceName]` that return `Promise<void>`
+ * - values are lifecycle policy objects that point to async method names
  *
- * Example: `{ login: "onLogin", logout: "onLogout" }`
+ * Example:
+ * `{ login: { method: "onLogin", retry: true } }`
  */
 export type ServiceHooks<ServiceName extends keyof Services> = Partial<
-  Record<RegistryEventName, AsyncHookMethodKeys<Services[ServiceName]>>
+  Record<
+    RegistryEventName,
+    LifecycleHookPolicy & {
+      method: AsyncHookMethodKeys<Services[ServiceName]>;
+    }
+  >
 >;
 
 /**
@@ -75,8 +85,8 @@ export interface ServiceManifest<
  *   description: "Authentication service",
  *   dependencies: [] as const,
  *   hooks: {
- *     login: "login",
- *     logout: "logout",
+ *     login: { method: "login", retry: true },
+ *     logout: { method: "logout" },
  *   },
  *   factory: () => new BasicAuthService(),
  * });
@@ -89,7 +99,7 @@ export interface ServiceManifest<
  *   description: "Sends notifications over network",
  *   dependencies: ["Logger", "Network"] as const,
  *   hooks: {
- *     login: "onLogin",
+ *     login: { method: "onLogin" },
  *   },
  *   factory: ({ Logger, Network }) =>
  *     new BasicNotificationService({ logger: Logger, network: Network }),

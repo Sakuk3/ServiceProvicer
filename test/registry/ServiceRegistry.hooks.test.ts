@@ -31,7 +31,7 @@ describe("ServiceRegistry hooks", () => {
         description: "storage hook test",
         dependencies: ["Logger"] as const,
         hooks: {
-          login: "handleLogin",
+          login: { method: "handleLogin" },
         },
         factory: () => storage,
       }),
@@ -76,7 +76,7 @@ describe("ServiceRegistry hooks", () => {
         description: "storage test service",
         dependencies: ["Logger"] as const,
         hooks: {
-          login: "handleLogin",
+          login: { method: "handleLogin" },
         },
         factory: () => storage,
       }),
@@ -123,7 +123,7 @@ describe("ServiceRegistry hooks", () => {
         description: "storage hook test",
         dependencies: ["Logger"] as const,
         hooks: {
-          login: "handleLogin",
+          login: { method: "handleLogin" },
         },
         factory: () => storage,
       }),
@@ -151,7 +151,7 @@ describe("ServiceRegistry hooks", () => {
         description: "storage no logger test",
         dependencies: [] as const,
         hooks: {
-          login: "handleLogin",
+          login: { method: "handleLogin" },
         },
         factory: () => storage,
       }),
@@ -177,7 +177,7 @@ describe("ServiceRegistry hooks", () => {
         description: "invalid hook test",
         dependencies: [] as const,
         hooks: {
-          login: "handleLogin",
+          login: { method: "handleLogin" },
         },
         factory: () => invalidStorage,
       }),
@@ -220,7 +220,7 @@ describe("ServiceRegistry hooks", () => {
         description: "storage non-error hook test",
         dependencies: ["Logger"] as const,
         hooks: {
-          login: "handleLogin",
+          login: { method: "handleLogin" },
         },
         factory: () => storage,
       }),
@@ -237,5 +237,82 @@ describe("ServiceRegistry hooks", () => {
       reason: nonErrorReason,
     });
     expect(result.failures[0]?.timestamp).toBeTypeOf("string");
+  });
+
+  it("retries a failing hook when retry is enabled", async () => {
+    const registry = new ServiceRegistry();
+    const logger = createLoggerService();
+    const failure = new Error("transient login failure");
+    const loginHook = vi
+      .fn<() => Promise<void>>()
+      .mockRejectedValueOnce(failure)
+      .mockResolvedValueOnce();
+    const storage = createStorageService({
+      onLogin: loginHook,
+      onLogout: () => Promise.resolve(),
+    });
+
+    registry.registerService(
+      defineService({
+        name: "Logger",
+        description: "logger retry hook test",
+        dependencies: [] as const,
+        factory: () => logger,
+      }),
+    );
+    registry.registerService(
+      defineService({
+        name: "Storage",
+        description: "storage retry hook test",
+        dependencies: ["Logger"] as const,
+        hooks: {
+          login: { method: "handleLogin", retry: true },
+        },
+        factory: () => storage,
+      }),
+    );
+
+    const result = await registry.triggerEvent("login");
+
+    expect(result).toEqual({ eventName: "login", failures: [] });
+    expect(loginHook).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not retry a failing hook when retry is not enabled", async () => {
+    const registry = new ServiceRegistry();
+    const logger = createLoggerService();
+    const failure = new Error("single attempt failure");
+    const loginHook = vi.fn<() => Promise<void>>().mockRejectedValue(failure);
+    const storage = createStorageService({
+      onLogin: loginHook,
+      onLogout: () => Promise.resolve(),
+    });
+
+    registry.registerService(
+      defineService({
+        name: "Logger",
+        description: "logger timeout hook test",
+        dependencies: [] as const,
+        factory: () => logger,
+      }),
+    );
+    registry.registerService(
+      defineService({
+        name: "Storage",
+        description: "storage no retry hook test",
+        dependencies: ["Logger"] as const,
+        hooks: {
+          login: { method: "handleLogin" },
+        },
+        factory: () => storage,
+      }),
+    );
+
+    const result = await registry.triggerEvent("login");
+
+    expect(result.failures).toHaveLength(1);
+    expect(result.failures[0]?.errorMessage).toBe("single attempt failure");
+    expect(result.failures[0]?.hookName).toBe("handleLogin");
+    expect(loginHook).toHaveBeenCalledTimes(1);
   });
 });

@@ -8,8 +8,8 @@ export const storageManifest = defineService({
   description: "Storage service",
   dependencies: ["Logger"],
   hooks: {
-    login: "handleLogin",
-    logout: "handleLogout",
+    login: { method: "handleLogin", retry: true },
+    logout: { method: "handleLogout" },
   },
   factory: (deps) => {
     const { Logger } = deps;
