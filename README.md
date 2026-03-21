@@ -78,21 +78,55 @@ npm run pack:check
 ## Package usage
 
 ```ts
-import { ServiceRegistry, defineService } from "service-provider-registry";
+import {
+  authManifest,
+  loggerManifest,
+  networkManifest,
+  notificationManifest,
+  storageManifest,
+  ServiceRegistry,
+} from "service-provider-registry";
 
 const registry = new ServiceRegistry();
-const logger = defineService({
-  name: "logger",
-  dependencies: [],
-  factory: () => ({
-    info: (message: string) => message,
-  }),
+
+registry.registerService(authManifest);
+registry.registerService(notificationManifest);
+registry.registerService(networkManifest);
+registry.registerService(storageManifest);
+registry.registerService(loggerManifest);
+```
+
+## Manifest example
+
+```ts
+import { defineService } from "../registry";
+import { AbstractLoggerService } from "../AbstractLoggerService";
+import type { LoggerService } from "../Logger";
+
+class ExampleStorageService extends AbstractLoggerService {
+  public constructor(name: string, loggerService: LoggerService) {
+    super(name, loggerService);
+  }
+
+  public clearStorage(): Promise<void> {
+    this.logger.info("clearStorage", "Storage cleared during logout");
+    return Promise.resolve();
+  }
+}
+
+const serviceName = "Storage";
+
+export const storageManifest = defineService({
+  name: serviceName,
+  dependencies: ["Logger"],
   hooks: {
-    login: [() => undefined],
+    logout: { method: "clearStorage", retry: true },
+  },
+  factory: (deps) => {
+    const { Logger } = deps;
+    return new ExampleStorageService(serviceName, Logger);
   },
 });
-
-registry.registerService(logger);
 ```
 
 ## Pre-publish checklist
