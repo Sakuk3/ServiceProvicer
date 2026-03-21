@@ -3,7 +3,6 @@ import type {
   CreateReadyHooksProps,
   DependencyRecord,
   FailedEntry,
-  FailedServiceInfo,
   HookPolicyMap,
   HookTask,
   LifecycleHookPolicy,
@@ -15,7 +14,6 @@ import type {
   TriggerEventFailure,
   TriggerEventResult,
   UnresolvedServiceInfo,
-  WaitingServiceInfo,
   WaitingEntry,
 } from "./types";
 import { HookExecutionError } from "./types";
@@ -25,37 +23,21 @@ import type { ServiceHooks, ServiceManifest } from "./manifest";
  * Registers service manifests, resolves dependencies, and executes lifecycle hooks.
  */
 export class ServiceRegistry {
-  private readonly serviceStore = new Map<ServiceKey, ServiceEntry>();
+  private readonly entriesByService = new Map<ServiceKey, ServiceEntry>();
   private readonly hookRetryAttempts = 1;
 
   /**
    * Lists all ready service names.
    */
   public listReadyServices(): ServiceKey[] {
-    const readyServices: ServiceKey[] = [];
-
-    this.serviceStore.forEach((entry, serviceName) => {
-      if (entry.state === "ready") {
-        readyServices.push(serviceName);
-      }
-    });
-
-    return readyServices;
+    return this.listServicesByState("ready");
   }
 
   /**
    * Lists all waiting service names.
    */
   public listWaitingServices(): ServiceKey[] {
-    const waitingServices: ServiceKey[] = [];
-
-    this.serviceStore.forEach((entry, serviceName) => {
-      if (entry.state === "waiting") {
-        waitingServices.push(serviceName);
-      }
-    });
-
-    return waitingServices;
+    return this.listServicesByState("waiting");
   }
 
   /**
@@ -64,29 +46,14 @@ export class ServiceRegistry {
   public getUnresolvedServices(): UnresolvedServiceInfo[] {
     const unresolvedServices: UnresolvedServiceInfo[] = [];
 
-    this.serviceStore.forEach((entry, serviceName) => {
-      if (entry.state === "waiting") {
-        const cyclePath = this.getCyclePath(serviceName);
-        const waitingInfo: WaitingServiceInfo = {
-          name: serviceName,
-          state: "waiting",
-          dependencies: entry.dependencies,
-          missingDependencies: this.getMissingDependencies(entry.dependencies),
-          ...(cyclePath === undefined ? {} : { cyclePath }),
-        };
-        unresolvedServices.push(waitingInfo);
-        return;
-      }
+    this.entriesByService.forEach((entry, serviceName) => {
+      const unresolvedService = this.toUnresolvedServiceInfo({
+        serviceName,
+        entry,
+      });
 
-      if (entry.state === "failed") {
-        const failedInfo: FailedServiceInfo = {
-          name: serviceName,
-          state: "failed",
-          dependencies: entry.dependencies,
-          errorMessage: entry.errorMessage,
-          initError: entry.initError,
-        };
-        unresolvedServices.push(failedInfo);
+      if (unresolvedService !== undefined) {
+        unresolvedServices.push(unresolvedService);
       }
     });
 
@@ -101,19 +68,20 @@ export class ServiceRegistry {
   public registerService<K extends ServiceKey, D extends readonly ServiceKey[]>(
     manifest: ServiceManifest<K, D>,
   ): void {
-    if (this.serviceStore.has(manifest.name)) {
-      throw new Error(`Service '${manifest.name}' is already registered`);
+    const { name, dependencies, hooks, factory } = manifest;
+
+    if (this.entriesByService.has(name)) {
+      throw new Error(`Service '${name}' is already registered`);
     }
 
     const waitingEntry: WaitingEntry<K, D> = {
       state: "waiting",
-      dependencies: manifest.dependencies,
-      hookPolicies: this.toHookPolicyMap(manifest.hooks),
-      createInstance: () =>
-        manifest.factory(this.buildDependencies(manifest.dependencies)),
+      dependencies,
+      hookPolicies: this.normalizeHookPolicies(hooks),
+      createInstance: () => factory(this.buildDependencies(dependencies)),
     };
 
-    this.serviceStore.set(manifest.name, waitingEntry);
+    this.entriesByService.set(name, waitingEntry);
 
     this.tryResolveAll();
   }
@@ -145,71 +113,12 @@ export class ServiceRegistry {
   ): Promise<TriggerEventResult> {
     const logger = this.getServiceUnsafe("Logger");
     const tasks = this.getHookTasks(eventName);
-    const taskCount = String(tasks.length);
+    this.logTriggerStart({ logger, eventName, taskCount: tasks.length });
 
-    logger?.info(
-      "ServiceRegistry",
-      `Triggering '${eventName}' for ${taskCount} hook(s)`,
-    );
+    const settled = await this.executeHookTasks({ logger, eventName, tasks });
+    const failures = this.collectTriggerFailures({ eventName, settled });
 
-    const settled = await Promise.allSettled(
-      tasks.map(async (task) => {
-        const { serviceName, hookName } = task;
-        await this.runWithLifecyclePolicy(task);
-        logger?.debug(
-          "ServiceRegistry",
-          `Event '${eventName}' completed for service '${serviceName}' via '${hookName}'`,
-        );
-      }),
-    );
-
-    const failures: TriggerEventFailure[] = [];
-    const getRejectedReason = (props: { reason: unknown }): unknown => {
-      const { reason } = props;
-
-      return reason;
-    };
-
-    for (const result of settled) {
-      if (result.status === "rejected") {
-        const reason = getRejectedReason(result as { reason: unknown });
-
-        if (reason instanceof HookExecutionError) {
-          failures.push({
-            serviceName: reason.serviceName,
-            hookName: reason.hookName,
-            eventName,
-            timestamp: new Date().toISOString(),
-            errorMessage: this.toErrorMessage(reason.causeReason),
-            reason: reason.causeReason,
-          });
-          continue;
-        }
-
-        failures.push({
-          serviceName: "Unknown",
-          hookName: "unknown",
-          eventName,
-          timestamp: new Date().toISOString(),
-          errorMessage: this.toErrorMessage(reason),
-          reason,
-        });
-      }
-    }
-
-    if (failures.length > 0) {
-      const failureCount = String(failures.length);
-      logger?.warn(
-        "ServiceRegistry",
-        `Event '${eventName}' completed with ${failureCount} failure(s)`,
-        failures,
-      );
-    } else {
-      logger?.info(
-        "ServiceRegistry",
-        `Event '${eventName}' completed successfully`,
-      );
-    }
+    this.logTriggerSummary({ logger, eventName, failures });
 
     return {
       eventName,
@@ -226,58 +135,21 @@ export class ServiceRegistry {
     while (progress) {
       progress = false;
 
-      this.serviceStore.forEach((entry, name) => {
-        if (entry.state !== "waiting") return;
-
-        const depsReady = entry.dependencies.every(
-          (dep) => this.serviceStore.get(dep)?.state === "ready",
-        );
-
-        if (!depsReady) return;
-
-        let instance: Services[ServiceKey];
-
-        try {
-          instance = entry.createInstance();
-        } catch (initError: unknown) {
-          const failedEntry: FailedEntry = {
-            state: "failed",
-            dependencies: entry.dependencies,
-            initError,
-            errorMessage: this.toErrorMessage(initError),
-          };
-          this.serviceStore.set(name, failedEntry);
-          progress = true;
+      this.entriesByService.forEach((entry, serviceName) => {
+        if (entry.state !== "waiting") {
           return;
         }
 
-        let hooks: ReadyHooks;
-
-        try {
-          hooks = this.createReadyHooks({
-            serviceName: name,
-            instance,
-            hookPolicies: entry.hookPolicies,
-          });
-        } catch (initError: unknown) {
-          const failedEntry: FailedEntry = {
-            state: "failed",
-            dependencies: entry.dependencies,
-            initError,
-            errorMessage: this.toErrorMessage(initError),
-          };
-          this.serviceStore.set(name, failedEntry);
-          progress = true;
+        if (!this.canResolveWaitingEntry(entry)) {
           return;
         }
 
-        const readyEntry: ReadyEntry = {
-          state: "ready",
-          instance,
-          hooks,
-        };
+        const resolvedEntry = this.resolveWaitingEntry({
+          serviceName,
+          entry,
+        });
 
-        this.serviceStore.set(name, readyEntry);
+        this.entriesByService.set(serviceName, resolvedEntry);
 
         progress = true;
       });
@@ -294,14 +166,18 @@ export class ServiceRegistry {
   ): DependencyRecord<D> {
     const result = {} as DependencyRecord<D>;
 
-    for (const dep of deps) {
-      const entry = this.getEntry(dep);
+    for (const dependencyName of deps) {
+      const entry = this.getEntry(dependencyName);
 
       if (entry?.state !== "ready") {
-        throw new Error(`Dependency ${dep} not ready`);
+        throw new Error(`Dependency ${dependencyName} not ready`);
       }
 
-      this.assignDependency(result, dep, entry.instance);
+      this.assignDependency({
+        result,
+        dependencyName,
+        instance: entry.instance,
+      });
     }
 
     return result;
@@ -310,25 +186,118 @@ export class ServiceRegistry {
   private assignDependency<
     D extends readonly ServiceKey[],
     K extends D[number],
-  >(
-    result: DependencyRecord<D>,
-    dependencyName: K,
-    instance: Services[K],
-  ): void {
+  >(props: {
+    result: DependencyRecord<D>;
+    dependencyName: K;
+    instance: Services[K];
+  }): void {
+    const { result, dependencyName, instance } = props;
+
     result[dependencyName] = instance;
   }
 
   private getEntry<K extends ServiceKey>(name: K): ServiceEntry<K> | undefined {
-    return this.serviceStore.get(name) as ServiceEntry<K> | undefined;
+    return this.entriesByService.get(name) as ServiceEntry<K> | undefined;
   }
 
   private getMissingDependencies(
     dependencies: readonly ServiceKey[],
   ): readonly ServiceKey[] {
     return dependencies.filter((dependencyName) => {
-      const dependencyEntry = this.serviceStore.get(dependencyName);
+      const dependencyEntry = this.entriesByService.get(dependencyName);
       return dependencyEntry?.state !== "ready";
     });
+  }
+
+  private listServicesByState(state: "ready" | "waiting"): ServiceKey[] {
+    const serviceNames: ServiceKey[] = [];
+
+    this.entriesByService.forEach((entry, serviceName) => {
+      if (entry.state === state) {
+        serviceNames.push(serviceName);
+      }
+    });
+
+    return serviceNames;
+  }
+
+  private toUnresolvedServiceInfo(props: {
+    serviceName: ServiceKey;
+    entry: ServiceEntry;
+  }): UnresolvedServiceInfo | undefined {
+    const { serviceName, entry } = props;
+
+    if (entry.state === "waiting") {
+      const cyclePath = this.getCyclePath(serviceName);
+
+      return {
+        name: serviceName,
+        state: "waiting",
+        dependencies: entry.dependencies,
+        missingDependencies: this.getMissingDependencies(entry.dependencies),
+        ...(cyclePath === undefined ? {} : { cyclePath }),
+      };
+    }
+
+    if (entry.state === "failed") {
+      return {
+        name: serviceName,
+        state: "failed",
+        dependencies: entry.dependencies,
+        errorMessage: entry.errorMessage,
+        initError: entry.initError,
+      };
+    }
+
+    return undefined;
+  }
+
+  private canResolveWaitingEntry(entry: WaitingEntry): boolean {
+    return entry.dependencies.every(
+      (dependencyName) =>
+        this.entriesByService.get(dependencyName)?.state === "ready",
+    );
+  }
+
+  private resolveWaitingEntry(props: {
+    serviceName: ServiceKey;
+    entry: WaitingEntry;
+  }): ReadyEntry | FailedEntry {
+    const { serviceName, entry } = props;
+
+    try {
+      const instance = entry.createInstance();
+      const hooks = this.createReadyHooks({
+        serviceName,
+        instance,
+        hookPolicies: entry.hookPolicies,
+      });
+
+      return {
+        state: "ready",
+        instance,
+        hooks,
+      };
+    } catch (initError: unknown) {
+      return this.toFailedEntry({
+        dependencies: entry.dependencies,
+        initError,
+      });
+    }
+  }
+
+  private toFailedEntry(props: {
+    dependencies: readonly ServiceKey[];
+    initError: unknown;
+  }): FailedEntry {
+    const { dependencies, initError } = props;
+
+    return {
+      state: "failed",
+      dependencies,
+      initError,
+      errorMessage: this.toErrorMessage(initError),
+    };
   }
 
   private toErrorMessage(reason: unknown): string {
@@ -369,7 +338,7 @@ export class ServiceRegistry {
   private getHookTasks(eventName: RegistryEventName): HookTask[] {
     const tasks: HookTask[] = [];
 
-    this.serviceStore.forEach((entry, serviceName) => {
+    this.entriesByService.forEach((entry, serviceName) => {
       if (entry.state !== "ready") {
         return;
       }
@@ -435,7 +404,7 @@ export class ServiceRegistry {
   /**
    * Normalizes optional manifest hooks into lifecycle policies.
    */
-  private toHookPolicyMap<K extends ServiceKey>(
+  private normalizeHookPolicies<K extends ServiceKey>(
     hooks: ServiceHooks<K> | undefined,
   ): HookPolicyMap {
     const hookPolicyMap: HookPolicyMap = {};
@@ -455,6 +424,111 @@ export class ServiceRegistry {
     return hookPolicyMap;
   }
 
+  private logTriggerStart(props: {
+    logger: Services["Logger"] | undefined;
+    eventName: RegistryEventName;
+    taskCount: number;
+  }): void {
+    const { logger, eventName, taskCount } = props;
+
+    logger?.info(
+      "ServiceRegistry",
+      `Triggering '${eventName}' for ${String(taskCount)} hook(s)`,
+    );
+  }
+
+  private async executeHookTasks(props: {
+    logger: Services["Logger"] | undefined;
+    eventName: RegistryEventName;
+    tasks: readonly HookTask[];
+  }): Promise<PromiseSettledResult<void>[]> {
+    const { logger, eventName, tasks } = props;
+
+    return Promise.allSettled(
+      tasks.map(async (task) => {
+        const { serviceName, hookName } = task;
+
+        await this.runWithLifecyclePolicy(task);
+        logger?.debug(
+          "ServiceRegistry",
+          `Event '${eventName}' completed for service '${serviceName}' via '${hookName}'`,
+        );
+      }),
+    );
+  }
+
+  private collectTriggerFailures(props: {
+    eventName: RegistryEventName;
+    settled: readonly PromiseSettledResult<void>[];
+  }): TriggerEventFailure[] {
+    const { eventName, settled } = props;
+    const failures: TriggerEventFailure[] = [];
+
+    for (const result of settled) {
+      if (result.status !== "rejected") {
+        continue;
+      }
+
+      failures.push(
+        this.toTriggerFailure({
+          eventName,
+          reason: result.reason,
+        }),
+      );
+    }
+
+    return failures;
+  }
+
+  private toTriggerFailure(props: {
+    eventName: RegistryEventName;
+    reason: unknown;
+  }): TriggerEventFailure {
+    const { eventName, reason } = props;
+
+    if (reason instanceof HookExecutionError) {
+      return {
+        serviceName: reason.serviceName,
+        hookName: reason.hookName,
+        eventName,
+        timestamp: new Date().toISOString(),
+        errorMessage: this.toErrorMessage(reason.causeReason),
+        reason: reason.causeReason,
+      };
+    }
+
+    return {
+      serviceName: "Unknown",
+      hookName: "unknown",
+      eventName,
+      timestamp: new Date().toISOString(),
+      errorMessage: this.toErrorMessage(reason),
+      reason,
+    };
+  }
+
+  private logTriggerSummary(props: {
+    logger: Services["Logger"] | undefined;
+    eventName: RegistryEventName;
+    failures: readonly TriggerEventFailure[];
+  }): void {
+    const { logger, eventName, failures } = props;
+
+    if (failures.length === 0) {
+      logger?.info(
+        "ServiceRegistry",
+        `Event '${eventName}' completed successfully`,
+      );
+      return;
+    }
+
+    logger?.warn(
+      "ServiceRegistry",
+      `Event '${eventName}' completed with ${String(failures.length)} failure(s)`,
+      failures,
+    );
+  }
+
   private validateHookPolicy(
     policy: LifecycleHookPolicy,
   ): ResolvedLifecycleHookPolicy {
@@ -469,14 +543,14 @@ export class ServiceRegistry {
   private getCyclePath(
     startServiceName: ServiceKey,
   ): readonly ServiceKey[] | undefined {
-    return this.findCycleFrom(startServiceName, []);
+    return this.findWaitingCyclePath(startServiceName, []);
   }
 
-  private findCycleFrom(
+  private findWaitingCyclePath(
     serviceName: ServiceKey,
     path: readonly ServiceKey[],
   ): ServiceKey[] | undefined {
-    const entry = this.serviceStore.get(serviceName);
+    const entry = this.entriesByService.get(serviceName);
 
     if (entry?.state !== "waiting") {
       return undefined;
@@ -485,7 +559,7 @@ export class ServiceRegistry {
     const currentPath = [...path, serviceName];
 
     for (const dependencyName of entry.dependencies) {
-      const dependencyEntry = this.serviceStore.get(dependencyName);
+      const dependencyEntry = this.entriesByService.get(dependencyName);
 
       if (dependencyEntry?.state !== "waiting") {
         continue;
@@ -497,7 +571,7 @@ export class ServiceRegistry {
         return [...currentPath.slice(cycleStartIndex), dependencyName];
       }
 
-      const cyclePath = this.findCycleFrom(dependencyName, currentPath);
+      const cyclePath = this.findWaitingCyclePath(dependencyName, currentPath);
 
       if (cyclePath !== undefined) {
         return cyclePath;
