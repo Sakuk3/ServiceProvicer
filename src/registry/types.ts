@@ -1,17 +1,9 @@
 import type { ServiceKey, Services } from "./serviceTypes";
+import type { RegistryEvents } from "./registryEventTypes";
 
 export type DependencyRecord<D extends readonly ServiceKey[]> = {
   [P in D[number]]: Services[P];
 };
-
-export interface LoginEventPayload {
-  username: string;
-}
-
-export interface RegistryEvents {
-  login: LoginEventPayload;
-  logout: undefined;
-}
 
 export type RegistryEventName = keyof RegistryEvents;
 export type RegistryEventPayload<E extends RegistryEventName> =
