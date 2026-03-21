@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
-import { defineService, ServiceRegistry } from "../../src/registry";
-import type { StorageService } from "../../src/services";
+import {
+  defineService,
+  type LoginEventPayload,
+  ServiceRegistry,
+  type StorageService,
+} from "../../src";
 import {
   createLoggerService,
   createStorageService,
@@ -10,7 +14,10 @@ describe("ServiceRegistry hooks", () => {
   it("runs matching hooks and reports no failures on success", async () => {
     const registry = new ServiceRegistry();
     const logger = createLoggerService();
-    const loginHook = vi.fn(() => Promise.resolve());
+    const loginPayload = { username: "alice" };
+    const loginHook = vi
+      .fn<(payload: LoginEventPayload) => Promise<void>>()
+      .mockResolvedValue();
     const logoutHook = vi.fn(() => Promise.resolve());
     const storage = createStorageService({
       onLogin: loginHook,
@@ -35,10 +42,14 @@ describe("ServiceRegistry hooks", () => {
       }),
     );
 
-    const result = await registry.triggerEvent("login");
+    const result = await registry.triggerEvent({
+      name: "login",
+      payload: loginPayload,
+    });
 
     expect(result).toEqual({ eventName: "login", failures: [] });
     expect(loginHook).toHaveBeenCalledTimes(1);
+    expect(loginHook).toHaveBeenCalledWith(loginPayload);
     expect(logoutHook).not.toHaveBeenCalled();
     expect(logger.info).toHaveBeenCalledWith(
       "ServiceRegistry",
@@ -78,7 +89,10 @@ describe("ServiceRegistry hooks", () => {
       }),
     );
 
-    const result = await registry.triggerEvent("login");
+    const result = await registry.triggerEvent({
+      name: "login",
+      payload: { username: "alice" },
+    });
 
     expect(result.eventName).toBe("login");
     expect(result.failures).toHaveLength(1);
@@ -123,7 +137,7 @@ describe("ServiceRegistry hooks", () => {
       }),
     );
 
-    const result = await registry.triggerEvent("logout");
+    const result = await registry.triggerEvent({ name: "logout" });
 
     expect(result).toEqual({ eventName: "logout", failures: [] });
     expect(logger.info).toHaveBeenCalledWith(
@@ -150,7 +164,10 @@ describe("ServiceRegistry hooks", () => {
       }),
     );
 
-    const result = await registry.triggerEvent("login");
+    const result = await registry.triggerEvent({
+      name: "login",
+      payload: { username: "alice" },
+    });
 
     expect(result).toEqual({ eventName: "login", failures: [] });
   });
@@ -216,7 +233,10 @@ describe("ServiceRegistry hooks", () => {
       }),
     );
 
-    const result = await registry.triggerEvent("login");
+    const result = await registry.triggerEvent({
+      name: "login",
+      payload: { username: "alice" },
+    });
 
     expect(result.failures).toHaveLength(1);
     expect(result.failures[0]).toMatchObject({
@@ -234,7 +254,7 @@ describe("ServiceRegistry hooks", () => {
     const logger = createLoggerService();
     const failure = new Error("transient login failure");
     const loginHook = vi
-      .fn<() => Promise<void>>()
+      .fn<(payload: LoginEventPayload) => Promise<void>>()
       .mockRejectedValueOnce(failure)
       .mockResolvedValueOnce();
     const storage = createStorageService({
@@ -260,7 +280,10 @@ describe("ServiceRegistry hooks", () => {
       }),
     );
 
-    const result = await registry.triggerEvent("login");
+    const result = await registry.triggerEvent({
+      name: "login",
+      payload: { username: "alice" },
+    });
 
     expect(result).toEqual({ eventName: "login", failures: [] });
     expect(loginHook).toHaveBeenCalledTimes(2);
@@ -270,7 +293,9 @@ describe("ServiceRegistry hooks", () => {
     const registry = new ServiceRegistry();
     const logger = createLoggerService();
     const failure = new Error("single attempt failure");
-    const loginHook = vi.fn<() => Promise<void>>().mockRejectedValue(failure);
+    const loginHook = vi
+      .fn<(payload: LoginEventPayload) => Promise<void>>()
+      .mockRejectedValue(failure);
     const storage = createStorageService({
       onLogin: loginHook,
       onLogout: () => Promise.resolve(),
@@ -294,7 +319,10 @@ describe("ServiceRegistry hooks", () => {
       }),
     );
 
-    const result = await registry.triggerEvent("login");
+    const result = await registry.triggerEvent({
+      name: "login",
+      payload: { username: "alice" },
+    });
 
     expect(result.failures).toHaveLength(1);
     expect(result.failures[0]?.errorMessage).toBe("single attempt failure");

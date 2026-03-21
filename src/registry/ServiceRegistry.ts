@@ -9,7 +9,9 @@ import type {
   ResolvedLifecycleHookPolicy,
   ReadyEntry,
   ReadyHooks,
+  RegistryEvent,
   RegistryEventName,
+  RegistryEventPayload,
   ServiceEntry,
   TriggerEventFailure,
   TriggerEventResult,
@@ -108,14 +110,20 @@ export class ServiceRegistry {
    *
    * Failures are aggregated and returned in the result.
    */
-  public async triggerEvent(
-    eventName: RegistryEventName,
-  ): Promise<TriggerEventResult> {
+  public async triggerEvent<E extends RegistryEventName>(
+    event: RegistryEvent<E>,
+  ): Promise<TriggerEventResult<E>> {
+    const { name: eventName, payload } = event;
     const logger = this.getServiceUnsafe("Logger");
     const tasks = this.getHookTasks(eventName);
     this.logTriggerStart({ logger, eventName, taskCount: tasks.length });
 
-    const settled = await this.executeHookTasks({ logger, eventName, tasks });
+    const settled = await this.executeHookTasks({
+      logger,
+      eventName,
+      payload,
+      tasks,
+    });
     const failures = this.collectTriggerFailures({ eventName, settled });
 
     this.logTriggerSummary({ logger, eventName, failures });
@@ -315,14 +323,18 @@ export class ServiceRegistry {
   /**
    * Executes a hook task with optional retry policy.
    */
-  private async runWithLifecyclePolicy(task: HookTask): Promise<void> {
+  private async runWithLifecyclePolicy<E extends RegistryEventName>(props: {
+    task: HookTask<E>;
+    payload: RegistryEventPayload<E> | undefined;
+  }): Promise<void> {
+    const { task, payload } = props;
     const { retry, run, serviceName, hookName } = task;
     const totalAttempts = retry ? this.hookRetryAttempts + 1 : 1;
     let latestReason: unknown;
 
     for (let attempt = 1; attempt <= totalAttempts; attempt += 1) {
       try {
-        await run();
+        await run(payload);
         return;
       } catch (reason: unknown) {
         latestReason = reason;
@@ -335,8 +347,10 @@ export class ServiceRegistry {
   /**
    * Collects executable hook tasks for the given lifecycle event.
    */
-  private getHookTasks(eventName: RegistryEventName): HookTask[] {
-    const tasks: HookTask[] = [];
+  private getHookTasks<E extends RegistryEventName>(
+    eventName: E,
+  ): HookTask<E>[] {
+    const tasks: HookTask<E>[] = [];
 
     this.entriesByService.forEach((entry, serviceName) => {
       if (entry.state !== "ready") {
@@ -354,6 +368,7 @@ export class ServiceRegistry {
       tasks.push({
         serviceName,
         hookName: methodName,
+        eventName,
         retry: readyHook.retry,
         run,
       });
@@ -390,11 +405,17 @@ export class ServiceRegistry {
         );
       }
 
-      const method = candidate as () => Promise<void>;
+      const method = candidate as (...args: unknown[]) => Promise<void>;
       hooks[eventName] = {
         methodName,
         retry,
-        run: () => method.call(instance),
+        run: (payload) => {
+          if (payload === undefined) {
+            return method.call(instance);
+          }
+
+          return method.call(instance, payload);
+        },
       };
     }
 
@@ -437,18 +458,19 @@ export class ServiceRegistry {
     );
   }
 
-  private async executeHookTasks(props: {
+  private async executeHookTasks<E extends RegistryEventName>(props: {
     logger: Services["Logger"] | undefined;
-    eventName: RegistryEventName;
-    tasks: readonly HookTask[];
+    eventName: E;
+    payload: RegistryEventPayload<E> | undefined;
+    tasks: readonly HookTask<E>[];
   }): Promise<PromiseSettledResult<void>[]> {
-    const { logger, eventName, tasks } = props;
+    const { logger, eventName, payload, tasks } = props;
 
     return Promise.allSettled(
       tasks.map(async (task) => {
         const { serviceName, hookName } = task;
 
-        await this.runWithLifecyclePolicy(task);
+        await this.runWithLifecyclePolicy({ task, payload });
         logger?.debug(
           "ServiceRegistry",
           `Event '${eventName}' completed for service '${serviceName}' via '${hookName}'`,
@@ -457,12 +479,12 @@ export class ServiceRegistry {
     );
   }
 
-  private collectTriggerFailures(props: {
-    eventName: RegistryEventName;
+  private collectTriggerFailures<E extends RegistryEventName>(props: {
+    eventName: E;
     settled: readonly PromiseSettledResult<void>[];
-  }): TriggerEventFailure[] {
+  }): TriggerEventFailure<E>[] {
     const { eventName, settled } = props;
-    const failures: TriggerEventFailure[] = [];
+    const failures: TriggerEventFailure<E>[] = [];
 
     for (const result of settled) {
       if (result.status !== "rejected") {
@@ -480,10 +502,10 @@ export class ServiceRegistry {
     return failures;
   }
 
-  private toTriggerFailure(props: {
-    eventName: RegistryEventName;
+  private toTriggerFailure<E extends RegistryEventName>(props: {
+    eventName: E;
     reason: unknown;
-  }): TriggerEventFailure {
+  }): TriggerEventFailure<E> {
     const { eventName, reason } = props;
 
     if (reason instanceof HookExecutionError) {

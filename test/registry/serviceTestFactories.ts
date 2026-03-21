@@ -2,10 +2,11 @@ import { vi } from "vitest";
 import type {
   AuthService,
   LoggerService,
+  LoginEventPayload,
   NetworkService,
   NotificationService,
   StorageService,
-} from "../../src/services";
+} from "../../src";
 
 export const createLoggerService = (): LoggerService => {
   return {
@@ -19,7 +20,7 @@ export const createLoggerService = (): LoggerService => {
 };
 
 export const createStorageService = (props: {
-  onLogin: () => Promise<void>;
+  onLogin: (payload: LoginEventPayload) => Promise<void>;
   onLogout: () => Promise<void>;
 }): StorageService => {
   const { onLogin, onLogout } = props;

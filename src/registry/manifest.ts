@@ -3,6 +3,7 @@ import type {
   DependencyRecord,
   LifecycleHookPolicy,
   RegistryEventName,
+  RegistryHookHandler,
 } from "./types";
 
 /**
@@ -24,8 +25,8 @@ type ValidDependencies<
   DependencyNames extends readonly (keyof Services)[],
 > = ServiceName extends DependencyNames[number] ? never : DependencyNames;
 
-type AsyncHookMethodKeys<T> = {
-  [P in keyof T]-?: T[P] extends () => Promise<void> ? P : never;
+type AsyncHookMethodKeys<T, EventName extends RegistryEventName> = {
+  [P in keyof T]-?: T[P] extends RegistryHookHandler<EventName> ? P : never;
 }[keyof T] &
   string;
 
@@ -39,14 +40,11 @@ type AsyncHookMethodKeys<T> = {
  * Example:
  * `{ login: { method: "onLogin", retry: true } }`
  */
-export type ServiceHooks<ServiceName extends keyof Services> = Partial<
-  Record<
-    RegistryEventName,
-    LifecycleHookPolicy & {
-      method: AsyncHookMethodKeys<Services[ServiceName]>;
-    }
-  >
->;
+export type ServiceHooks<ServiceName extends keyof Services> = Partial<{
+  [EventName in RegistryEventName]: LifecycleHookPolicy & {
+    method: AsyncHookMethodKeys<Services[ServiceName], EventName>;
+  };
+}>;
 
 /**
  * Describes how a service is registered and constructed.

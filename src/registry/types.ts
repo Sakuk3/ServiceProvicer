@@ -4,27 +4,57 @@ export type DependencyRecord<D extends readonly ServiceKey[]> = {
   [P in D[number]]: Services[P];
 };
 
-export type RegistryEventName = "login" | "logout";
+export interface LoginEventPayload {
+  username: string;
+}
 
-export interface TriggerEventFailure {
+export interface RegistryEvents {
+  login: LoginEventPayload;
+  logout: undefined;
+}
+
+export type RegistryEventName = keyof RegistryEvents;
+export type RegistryEventPayload<E extends RegistryEventName> =
+  RegistryEvents[E];
+export type RegistryEvent<E extends RegistryEventName = RegistryEventName> =
+  RegistryEventPayload<E> extends undefined
+    ? {
+        name: E;
+        payload?: RegistryEventPayload<E>;
+      }
+    : {
+        name: E;
+        payload: RegistryEventPayload<E>;
+      };
+export type RegistryHookHandler<E extends RegistryEventName> =
+  RegistryEventPayload<E> extends undefined
+    ? () => Promise<void>
+    : (payload: RegistryEventPayload<E>) => Promise<void>;
+
+export interface TriggerEventFailure<
+  E extends RegistryEventName = RegistryEventName,
+> {
   serviceName: ServiceKey | "Unknown";
   hookName: string;
-  eventName: RegistryEventName;
+  eventName: E;
   timestamp: string;
   errorMessage: string;
   reason: unknown;
 }
 
-export interface TriggerEventResult {
-  eventName: RegistryEventName;
-  failures: readonly TriggerEventFailure[];
+export interface TriggerEventResult<
+  E extends RegistryEventName = RegistryEventName,
+> {
+  eventName: E;
+  failures: readonly TriggerEventFailure<E>[];
 }
 
-export interface HookTask {
+export interface HookTask<E extends RegistryEventName = RegistryEventName> {
   serviceName: ServiceKey;
   hookName: string;
+  eventName: E;
   retry: boolean;
-  run: () => Promise<void>;
+  run: (payload?: RegistryEventPayload<E>) => Promise<void>;
 }
 
 export interface LifecycleHookPolicy {
@@ -37,13 +67,15 @@ export interface ResolvedLifecycleHookPolicy {
   retry: boolean;
 }
 
-export interface ReadyHook {
+export interface ReadyHook<E extends RegistryEventName = RegistryEventName> {
   methodName: string;
   retry: boolean;
-  run: () => Promise<void>;
+  run: (payload?: RegistryEventPayload<E>) => Promise<void>;
 }
 
-export type ReadyHooks = Partial<Record<RegistryEventName, ReadyHook>>;
+export type ReadyHooks = {
+  [E in RegistryEventName]?: ReadyHook<E>;
+};
 export type HookPolicyMap = Partial<
   Record<RegistryEventName, ResolvedLifecycleHookPolicy>
 >;

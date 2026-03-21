@@ -2,13 +2,11 @@ import { describe, expect, it, vi } from "vitest";
 import {
   defineService,
   ServiceRegistry,
+  type AuthService,
   type FailedServiceInfo,
-} from "../../src/registry";
-import type {
-  AuthService,
-  LoggerService,
-  NetworkService,
-} from "../../src/services";
+  type LoggerService,
+  type NetworkService,
+} from "../../src";
 import {
   createAuthService,
   createLoggerService,

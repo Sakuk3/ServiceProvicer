@@ -1,6 +1,7 @@
 import { AbstractLoggerService } from "../AbstractLoggerService";
 import type { LoggerService } from "../Logger";
 import type { StorageService } from "./StorageService";
+import type { LoginEventPayload } from "../../registry";
 
 export class BasicStorageService
   extends AbstractLoggerService
@@ -18,8 +19,13 @@ export class BasicStorageService
     this.logger.debug("save", `Stored value for key ${key}`);
   }
 
-  public handleLogin(): Promise<void> {
-    this.logger.info("handleLogin", "Storage login hook executed");
+  public handleLogin(props: LoginEventPayload): Promise<void> {
+    const { username } = props;
+
+    this.logger.info(
+      "handleLogin",
+      `Storage login hook executed for ${username}`,
+    );
     return Promise.resolve();
   }
 
