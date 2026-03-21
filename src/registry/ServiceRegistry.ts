@@ -246,11 +246,11 @@ export class ServiceRegistry {
     const { serviceName, instance, hookMethods } = props;
     const hooks: ReadyHooks = {};
 
-    const registerReadyHook = (eventName: RegistryEventName): void => {
+    for (const eventName of Object.keys(hookMethods) as RegistryEventName[]) {
       const methodName = hookMethods[eventName];
 
       if (methodName === undefined) {
-        return;
+        continue;
       }
 
       const candidate = (instance as unknown as Record<string, unknown>)[
@@ -268,10 +268,7 @@ export class ServiceRegistry {
         methodName,
         run: () => method.call(instance),
       };
-    };
-
-    registerReadyHook("login");
-    registerReadyHook("logout");
+    }
 
     return hooks;
   }
@@ -279,10 +276,20 @@ export class ServiceRegistry {
   private toHookMethodMap<K extends ServiceKey>(
     hooks: ServiceHooks<K> | undefined,
   ): HookMethodMap {
+    const hookMethodMap: HookMethodMap = {};
+
     if (hooks === undefined) {
-      return {};
+      return hookMethodMap;
     }
 
-    return hooks as HookMethodMap;
+    for (const eventName of Object.keys(hooks) as RegistryEventName[]) {
+      const methodName = hooks[eventName];
+
+      if (methodName !== undefined) {
+        hookMethodMap[eventName] = methodName;
+      }
+    }
+
+    return hookMethodMap;
   }
 }
