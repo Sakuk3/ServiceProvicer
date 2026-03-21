@@ -15,9 +15,17 @@ import {
 } from "./types";
 import type { ServiceHooks, ServiceManifest } from "./manifest";
 
+/**
+ * Registers service manifests, resolves dependencies, and executes lifecycle hooks.
+ */
 export class ServiceRegistry {
   private readonly serviceStore = new Map<ServiceKey, ServiceEntry>();
 
+  /**
+   * Registers a service manifest and eagerly resolves any now-satisfiable services.
+   *
+   * @throws Error when a service with the same name is already registered.
+   */
   public registerService<K extends ServiceKey, D extends readonly ServiceKey[]>(
     manifest: ServiceManifest<K, D>,
   ): void {
@@ -40,6 +48,11 @@ export class ServiceRegistry {
     this.tryResolveAll();
   }
 
+  /**
+   * Returns a ready service instance, or `undefined` when not yet resolved.
+   *
+   * This method does not throw when the service is missing.
+   */
   public getServiceUnsafe<K extends ServiceKey>(
     name: K,
   ): Services[K] | undefined {
@@ -49,6 +62,11 @@ export class ServiceRegistry {
       : undefined;
   }
 
+  /**
+   * Triggers a lifecycle event on all ready services that declare a hook.
+   *
+   * Failures are aggregated and returned in the result.
+   */
   public async triggerEvent(
     eventName: RegistryEventName,
   ): Promise<TriggerEventResult> {
@@ -116,6 +134,9 @@ export class ServiceRegistry {
     };
   }
 
+  /**
+   * Resolves waiting services until no additional progress can be made.
+   */
   private tryResolveAll(): void {
     let progress = true;
 
@@ -150,6 +171,11 @@ export class ServiceRegistry {
     }
   }
 
+  /**
+   * Builds the dependency object passed to a manifest factory.
+   *
+   * @throws Error when a declared dependency is not ready.
+   */
   private buildDependencies<D extends readonly ServiceKey[]>(
     deps: D,
   ): DependencyRecord<D> {
@@ -169,6 +195,9 @@ export class ServiceRegistry {
     return result;
   }
 
+  /**
+   * Collects executable hook tasks for the given lifecycle event.
+   */
   private getHookTasks(eventName: RegistryEventName): HookTask[] {
     const tasks: HookTask[] = [];
 
@@ -201,6 +230,11 @@ export class ServiceRegistry {
     return tasks;
   }
 
+  /**
+   * Binds declared hook method names to callable functions on the instance.
+   *
+   * @throws Error when a declared hook is not a callable method.
+   */
   private createReadyHooks(props: CreateReadyHooksProps): ReadyHooks {
     const { serviceName, instance, hookMethods } = props;
     const hooks: ReadyHooks = {};
@@ -232,6 +266,9 @@ export class ServiceRegistry {
     return hooks;
   }
 
+  /**
+   * Normalizes optional manifest hooks into a plain event to method map.
+   */
   private toHookMethodMap<K extends ServiceKey>(
     hooks: ServiceHooks<K> | undefined,
   ): HookMethodMap {
