@@ -35,15 +35,23 @@ npm install
 npm run start
 ```
 
-This executes `src/index.ts`, registers the built in service manifests, and triggers lifecycle events.
+This executes `examples/demo.ts`, registers the built-in service manifests, and triggers lifecycle events.
 
-### 3) Run tests
+### 3) Build distributable files
+
+```sh
+npm run build
+```
+
+Compiled output is written to `dist/`.
+
+### 4) Run tests
 
 ```sh
 npm run test
 ```
 
-### 4) Optional quality checks
+### 5) Optional quality checks
 
 ```sh
 npm run lint
@@ -51,8 +59,46 @@ npm run format
 npm run test:typecheck
 ```
 
+### 6) Public release checks
+
+```sh
+npm run verify
+npm run pack:check
+```
+
+`npm run pack:check` prints the exact tarball content so you can confirm no private files are included.
+
 ## Project layout
 
 - `src/registry` core registry types and implementation
 - `src/services` concrete service abstractions, manifests, and implementations
+- `examples` local runnable demo code excluded from the published package
 - `test/registry` registration, hooks, and getter behavior tests
+
+## Package usage
+
+```ts
+import { ServiceRegistry, defineService } from "service-provider-registry";
+
+const registry = new ServiceRegistry();
+const logger = defineService({
+  name: "logger",
+  dependencies: [],
+  factory: () => ({
+    info: (message: string) => message,
+  }),
+  hooks: {
+    login: [() => undefined],
+  },
+});
+
+registry.registerService(logger);
+```
+
+## Pre-publish checklist
+
+- Confirm package metadata in `package.json` (`name`, `repository`, `bugs`, `homepage`)
+- Run `npm run verify`
+- Run `npm run pack:check` and inspect tarball contents
+- Ensure `git status` is clean
+- Publish with `npm publish --access public`

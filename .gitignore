@@ -1,5 +1,8 @@
 /tmp
 /out-tsc
+/dist
+/build
+/coverage
 
 /node_modules
 npm-debug.log*
@@ -9,3 +12,8 @@ yarn-error.log*
 .pnp.js
 
 .vscode/*
+.idea/
+
+.env
+.env.*
+!.env.example

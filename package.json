@@ -1,22 +1,66 @@
 {
-  "name": "service_registry",
+  "name": "service-provider-registry",
   "version": "1.0.0",
-  "description": "",
+  "description": "Typed service registry for dependency-aware service composition and lifecycle orchestration.",
   "license": "ISC",
   "author": "",
   "type": "commonjs",
-  "main": "./src/index.js",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./registry": {
+      "types": "./dist/registry/index.d.ts",
+      "default": "./dist/registry/index.js"
+    },
+    "./services": {
+      "types": "./dist/services/index.d.ts",
+      "default": "./dist/services/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "keywords": [
+    "typescript",
+    "service-registry",
+    "dependency-injection",
+    "lifecycle"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/your-org/serviceProvider.git"
+  },
+  "bugs": {
+    "url": "https://github.com/your-org/serviceProvider/issues"
+  },
+  "homepage": "https://github.com/your-org/serviceProvider#readme",
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
-    "start": "tsx ./src/index.ts",
-    "start:watch": "tsx watch ./src/index.ts",
+    "start": "tsx ./examples/demo.ts",
+    "start:watch": "tsx watch ./examples/demo.ts",
+    "build": "npm run clean && tsc -p tsconfig.json",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "test:typecheck": "tsc --noEmit -p tsconfig.test.json",
-    "lint": "eslint --fix {src,test}/**/*.{js,ts,jsx,tsx} --no-error-on-unmatched-pattern",
-    "format": "prettier --write {src,test}/**/* ./*.{json,*.json} !package-lock.json -u --no-error-on-unmatched-pattern",
+    "lint": "eslint --fix {src,test,examples}/**/*.{js,ts,jsx,tsx} --no-error-on-unmatched-pattern",
+    "format": "prettier --write {src,test,examples}/**/* ./*.{json,*.json} !package-lock.json -u --no-error-on-unmatched-pattern",
+    "verify": "npm run lint && npm run format && npm run test && npm run test:typecheck && npm run build",
+    "pack:check": "npm pack --dry-run",
     "clean": "rm -rf dist build package",
-    "prepare": "husky"
+    "prepare": "husky",
+    "prepublishOnly": "npm run verify"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
@@ -36,9 +80,8 @@
     "vite": "^7.1.7",
     "vitest": "^3.2.4"
   },
-  "private": true,
   "lint-staged": {
-    "{src,test}/**/*.{js,ts,jsx,tsx}": [
+    "{src,test,examples}/**/*.{js,ts,jsx,tsx}": [
       "eslint --fix",
       "prettier --write -u"
     ],

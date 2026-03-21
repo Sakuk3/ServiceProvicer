@@ -58,6 +58,18 @@ export default defineConfig([
       "no-restricted-globals": [
         "error",
         {
+          name: "xdescribe",
+          message: "Avoid disabled tests in committed code.",
+        },
+        {
+          name: "xit",
+          message: "Avoid disabled tests in committed code.",
+        },
+        {
+          name: "xtest",
+          message: "Avoid disabled tests in committed code.",
+        },
+        {
           name: "fdescribe",
           message: "Avoid focused tests in committed code.",
         },
@@ -83,7 +95,31 @@ export default defineConfig([
           property: "only",
           message: "Avoid focused tests in committed code.",
         },
+        {
+          object: "describe",
+          property: "skip",
+          message: "Avoid disabled tests in committed code.",
+        },
+        {
+          object: "it",
+          property: "skip",
+          message: "Avoid disabled tests in committed code.",
+        },
+        {
+          object: "test",
+          property: "skip",
+          message: "Avoid disabled tests in committed code.",
+        },
       ],
+    },
+  },
+  {
+    files: ["examples/**/*.ts"],
+    languageOptions: {
+      parserOptions: {
+        projectService: false,
+        project: "./tsconfig.test.json",
+      },
     },
   },
   prettierConfig,
