@@ -448,7 +448,7 @@ export class ServiceRegistry {
       const policy = hooks[eventName];
 
       if (policy !== undefined) {
-        hookPolicyMap[eventName] = this.validateHookPolicy(eventName, policy);
+        hookPolicyMap[eventName] = this.validateHookPolicy(policy);
       }
     }
 
@@ -456,16 +456,9 @@ export class ServiceRegistry {
   }
 
   private validateHookPolicy(
-    eventName: RegistryEventName,
     policy: LifecycleHookPolicy,
   ): ResolvedLifecycleHookPolicy {
     const { method, retry } = policy;
-
-    if (retry !== undefined && typeof retry !== "boolean") {
-      throw new Error(
-        `Hook '${method}' for event '${eventName}' has invalid 'retry'; expected true or false`,
-      );
-    }
 
     return {
       method,
