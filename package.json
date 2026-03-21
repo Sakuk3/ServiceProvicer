@@ -9,16 +9,19 @@
   "scripts": {
     "start": "tsx ./src/index.ts",
     "start:watch": "tsx watch ./src/index.ts",
-    "lint": "eslint src/ --ext .js,.jsx,.ts,.tsx",
+    "lint": "eslint --fix {src,test}/**/*.{js,ts,jsx,tsx} --no-error-on-unmatched-pattern",
+    "format": "prettier --write {src,test}/**/* ./*.{json,*.json} !package-lock.json -u --no-error-on-unmatched-pattern",
     "clean": "rm -rf dist build package",
-    "format": "prettier ./src --write"
+    "prepare": "husky"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "eslint": "^10.1.0",
     "eslint-config-prettier": "^10.1.8",
     "globals": "^17.4.0",
+    "husky": "^9.1.7",
     "jiti": "^2.6.1",
+    "lint-staged": "^16.4.0",
     "prettier": "3.8.1",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3",
@@ -27,5 +30,12 @@
   "dependencies": {
     "@types/node": "^25.5.0"
   },
-  "private": true
+  "private": true,
+  "lint-staged": {
+    "{src,test}/**/*.{js,ts,jsx,tsx}": [
+      "eslint --fix",
+      "prettier --write -u"
+    ],
+    "!**/*.{js,ts,jsx,tsx}": "prettier --write -u"
+  }
 }
