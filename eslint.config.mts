@@ -15,5 +15,34 @@ export default defineConfig([
       },
     },
   },
+  {
+    files: ["test/**/*.ts"],
+    languageOptions: {
+      parserOptions: {
+        projectService: false,
+        project: "./tsconfig.test.json",
+      },
+    },
+    rules: {
+      "no-restricted-properties": [
+        "error",
+        {
+          object: "describe",
+          property: "only",
+          message: "Avoid focused tests in committed code.",
+        },
+        {
+          object: "it",
+          property: "only",
+          message: "Avoid focused tests in committed code.",
+        },
+        {
+          object: "test",
+          property: "only",
+          message: "Avoid focused tests in committed code.",
+        },
+      ],
+    },
+  },
   prettierConfig,
 ]);
