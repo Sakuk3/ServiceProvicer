@@ -14,6 +14,17 @@ type ValidDependencies<
   D extends readonly (keyof Services)[],
 > = K extends D[number] ? never : D;
 
+export type RegistryEventName = "login" | "logout";
+
+type AsyncHookMethodKeys<T> = {
+  [P in keyof T]-?: T[P] extends () => Promise<void> ? P : never;
+}[keyof T] &
+  string;
+
+export type ServiceHooks<K extends keyof Services> = Partial<
+  Record<RegistryEventName, AsyncHookMethodKeys<Services[K]>>
+>;
+
 export interface ServiceManifest<
   K extends keyof Services,
   D extends readonly (keyof Services)[],
@@ -21,6 +32,7 @@ export interface ServiceManifest<
   name: K;
   description: string;
   dependencies: ValidDependencies<K, D>;
+  hooks?: ServiceHooks<K>;
   factory: FactoryFunction<K, D>;
 }
 

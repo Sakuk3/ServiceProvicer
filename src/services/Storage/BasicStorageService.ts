@@ -17,4 +17,14 @@ export class BasicStorageService
     this.records.set(key, value);
     this.logger.debug("save", `Stored value for key ${key}`);
   }
+
+  public handleLogin(): Promise<void> {
+    this.logger.info("handleLogin", "Storage login hook executed");
+    return Promise.resolve();
+  }
+
+  public handleLogout(): Promise<void> {
+    this.logger.info("handleLogout", "Storage logout hook executed");
+    return Promise.resolve();
+  }
 }

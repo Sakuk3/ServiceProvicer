@@ -7,6 +7,10 @@ export const storageManifest = defineService({
   name: serviceName,
   description: "Storage service",
   dependencies: ["Logger"],
+  hooks: {
+    login: "handleLogin",
+    logout: "handleLogout",
+  },
   factory: (deps) => {
     const { Logger } = deps;
     return new BasicStorageService(serviceName, Logger);
