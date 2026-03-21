@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { defineService, ServiceRegistry } from "../../src/registry";
 import {
   createLoggerService,
+  createNotificationService,
   createStorageService,
 } from "./serviceTestFactories";
 
@@ -70,6 +71,107 @@ describe("ServiceRegistry getters", () => {
       expect(firstStorageRead).toBe(storage);
       expect(secondStorageRead).toBe(storage);
       expect(firstStorageRead).toBe(secondStorageRead);
+    });
+  });
+
+  describe("registry introspection", () => {
+    it("lists ready and waiting services", () => {
+      const registry = new ServiceRegistry();
+      const logger = createLoggerService();
+      const storage = createStorageService({
+        onLogin: () => Promise.resolve(),
+        onLogout: () => Promise.resolve(),
+      });
+
+      registry.registerService(
+        defineService({
+          name: "Storage",
+          description: "storage introspection waiting test",
+          dependencies: ["Logger"] as const,
+          factory: () => storage,
+        }),
+      );
+
+      expect(registry.listWaitingServices()).toEqual(["Storage"]);
+      expect(registry.listReadyServices()).toEqual([]);
+
+      registry.registerService(
+        defineService({
+          name: "Logger",
+          description: "logger introspection ready test",
+          dependencies: [] as const,
+          factory: () => logger,
+        }),
+      );
+
+      expect(registry.listReadyServices()).toEqual(["Storage", "Logger"]);
+      expect(registry.listWaitingServices()).toEqual([]);
+    });
+
+    it("returns unresolved diagnostics for waiting and failed services", () => {
+      const registry = new ServiceRegistry();
+      const logger = createLoggerService();
+
+      registry.registerService(
+        defineService({
+          name: "Notification",
+          description: "notification unresolved test",
+          dependencies: ["Auth", "Logger"] as const,
+          factory: () => createNotificationService(),
+        }),
+      );
+
+      registry.registerService(
+        defineService({
+          name: "Auth",
+          description: "auth failed test",
+          dependencies: ["Logger"] as const,
+          factory: () => {
+            throw new Error("Auth init failed");
+          },
+        }),
+      );
+
+      registry.registerService(
+        defineService({
+          name: "Logger",
+          description: "logger unresolved test",
+          dependencies: [] as const,
+          factory: () => logger,
+        }),
+      );
+
+      const unresolvedServices = registry.getUnresolvedServices();
+      const failedAuthService = unresolvedServices.find(
+        (entry) => entry.state === "failed" && entry.name === "Auth",
+      );
+
+      expect(registry.listReadyServices()).toEqual(["Logger"]);
+      expect(registry.listWaitingServices()).toEqual(["Notification"]);
+      expect(unresolvedServices).toHaveLength(2);
+      expect(unresolvedServices).toEqual(
+        expect.arrayContaining([
+          {
+            name: "Notification",
+            state: "waiting",
+            dependencies: ["Auth", "Logger"],
+            missingDependencies: ["Auth"],
+          },
+        ]),
+      );
+      expect(failedAuthService).toBeDefined();
+
+      if (failedAuthService === undefined) {
+        throw new Error("Expected Auth to be in failed unresolved services");
+      }
+
+      expect(failedAuthService).toMatchObject({
+        name: "Auth",
+        state: "failed",
+        dependencies: ["Logger"],
+        errorMessage: "Auth init failed",
+      });
+      expect(failedAuthService.initError).toBeInstanceOf(Error);
     });
   });
 });

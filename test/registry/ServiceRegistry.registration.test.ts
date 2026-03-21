@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
-import { defineService, ServiceRegistry } from "../../src/registry";
+import {
+  defineService,
+  ServiceRegistry,
+  type FailedServiceInfo,
+} from "../../src/registry";
 import type {
   AuthService,
   LoggerService,
@@ -224,5 +228,97 @@ describe("ServiceRegistry registration", () => {
         }),
       );
     }).toThrow("Service 'Logger' is already registered");
+  });
+
+  it("marks a service as failed when its factory throws after dependencies are ready", () => {
+    const registry = new ServiceRegistry();
+    const logger = createLoggerService();
+
+    registry.registerService(
+      defineService({
+        name: "Auth",
+        description: "auth init failure test",
+        dependencies: ["Logger"] as const,
+        factory: () => {
+          throw new Error("Auth factory failed");
+        },
+      }),
+    );
+
+    registry.registerService(
+      defineService({
+        name: "Logger",
+        description: "logger dependency for auth failure",
+        dependencies: [] as const,
+        factory: () => logger,
+      }),
+    );
+
+    const unresolvedServices = registry.getUnresolvedServices();
+    const failedAuthService = unresolvedServices.find(
+      (entry): entry is FailedServiceInfo =>
+        entry.state === "failed" && entry.name === "Auth",
+    );
+
+    expect(registry.getServiceUnsafe("Auth")).toBeUndefined();
+    expect(registry.getServiceUnsafe("Logger")).toBe(logger);
+    expect(registry.listReadyServices()).toEqual(["Logger"]);
+    expect(registry.listWaitingServices()).toEqual([]);
+    expect(failedAuthService).toBeDefined();
+
+    if (failedAuthService === undefined) {
+      throw new Error("Expected Auth to be in failed unresolved services");
+    }
+
+    expect(failedAuthService.errorMessage).toBe("Auth factory failed");
+    expect(failedAuthService.initError).toBeInstanceOf(Error);
+  });
+
+  it("returns unresolved dependency diagnostics for waiting services", () => {
+    const registry = new ServiceRegistry();
+    const logger = createLoggerService();
+
+    registry.registerService(
+      defineService({
+        name: "Notification",
+        description: "notification unresolved dependencies test",
+        dependencies: ["Auth", "Logger"] as const,
+        factory: () => createNotificationService(),
+      }),
+    );
+
+    registry.registerService(
+      defineService({
+        name: "Logger",
+        description: "logger for unresolved diagnostics",
+        dependencies: [] as const,
+        factory: () => logger,
+      }),
+    );
+
+    expect(registry.getServiceUnsafe("Notification")).toBeUndefined();
+    expect(registry.listReadyServices()).toEqual(["Logger"]);
+    expect(registry.listWaitingServices()).toEqual(["Notification"]);
+    expect(registry.getUnresolvedServices()).toContainEqual({
+      name: "Notification",
+      state: "waiting",
+      dependencies: ["Auth", "Logger"],
+      missingDependencies: ["Auth"],
+    });
+  });
+
+  it("rejects manifests with duplicate dependency entries", () => {
+    expect(() => {
+      defineService({
+        name: "Storage",
+        description: "duplicate dependency test",
+        dependencies: ["Logger", "Logger"] as const,
+        factory: () =>
+          createStorageService({
+            onLogin: () => Promise.resolve(),
+            onLogout: () => Promise.resolve(),
+          }),
+      });
+    }).toThrow("Service 'Storage' has duplicate dependencies: Logger");
   });
 });

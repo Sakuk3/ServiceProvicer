@@ -89,8 +89,11 @@ describe("ServiceRegistry hooks", () => {
     expect(result.failures[0]).toMatchObject({
       serviceName: "Storage",
       hookName: "handleLogin",
+      eventName: "login",
+      errorMessage: "login failed",
       reason: failure,
     });
+    expect(result.failures[0]?.timestamp).toBeTypeOf("string");
     expect(logger.warn).toHaveBeenCalledWith(
       "ServiceRegistry",
       "Event 'login' completed with 1 failure(s)",
@@ -159,7 +162,7 @@ describe("ServiceRegistry hooks", () => {
     expect(result).toEqual({ eventName: "login", failures: [] });
   });
 
-  it("throws when a configured hook is not callable on the service instance", () => {
+  it("marks service as failed when a configured hook is not callable", () => {
     const registry = new ServiceRegistry();
     const invalidStorage = {
       name: "Storage",
@@ -168,18 +171,71 @@ describe("ServiceRegistry hooks", () => {
       handleLogout: () => Promise.resolve(),
     } as unknown as StorageService;
 
-    expect(() => {
-      registry.registerService(
-        defineService({
-          name: "Storage",
-          description: "invalid hook test",
-          dependencies: [] as const,
-          hooks: {
-            login: "handleLogin",
-          },
-          factory: () => invalidStorage,
+    registry.registerService(
+      defineService({
+        name: "Storage",
+        description: "invalid hook test",
+        dependencies: [] as const,
+        hooks: {
+          login: "handleLogin",
+        },
+        factory: () => invalidStorage,
+      }),
+    );
+
+    const unresolved = registry.getUnresolvedServices();
+
+    expect(registry.getServiceUnsafe("Storage")).toBeUndefined();
+    expect(unresolved).toHaveLength(1);
+    expect(unresolved[0]).toMatchObject({
+      name: "Storage",
+      state: "failed",
+      errorMessage: "Hook 'handleLogin' is not callable on service 'Storage'",
+    });
+  });
+
+  it("normalizes non-Error hook rejection shapes in failures", async () => {
+    const registry = new ServiceRegistry();
+    const logger = createLoggerService();
+    const nonErrorReason = { code: "E_HOOK", detail: "failed" };
+    const storage = createStorageService({
+      onLogin: () =>
+        new Promise<void>((_resolve, reject) => {
+          reject(nonErrorReason as unknown as Error);
         }),
-      );
-    }).toThrow("Hook 'handleLogin' is not callable on service 'Storage'");
+      onLogout: () => Promise.resolve(),
+    });
+
+    registry.registerService(
+      defineService({
+        name: "Logger",
+        description: "logger non-error hook test",
+        dependencies: [] as const,
+        factory: () => logger,
+      }),
+    );
+    registry.registerService(
+      defineService({
+        name: "Storage",
+        description: "storage non-error hook test",
+        dependencies: ["Logger"] as const,
+        hooks: {
+          login: "handleLogin",
+        },
+        factory: () => storage,
+      }),
+    );
+
+    const result = await registry.triggerEvent("login");
+
+    expect(result.failures).toHaveLength(1);
+    expect(result.failures[0]).toMatchObject({
+      serviceName: "Storage",
+      hookName: "handleLogin",
+      eventName: "login",
+      errorMessage: "Unknown error",
+      reason: nonErrorReason,
+    });
+    expect(result.failures[0]?.timestamp).toBeTypeOf("string");
   });
 });
