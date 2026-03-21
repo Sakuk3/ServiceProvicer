@@ -26,6 +26,7 @@ export class BasicLoggerService
     private readonly minLogLevel: LogLevel,
   ) {
     super(name);
+    this.debug(this.name, "Service initialized");
   }
 
   public log(logLevel: LogLevel, scope: string, ...args: unknown[]): void {

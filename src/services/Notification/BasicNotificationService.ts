@@ -8,6 +8,7 @@ export class BasicNotificationService
 {
   public constructor(name: string, loggerService: LoggerService) {
     super(name, loggerService);
+    this.logger.debug("Service initialized");
   }
 
   public notify(message: string): void {

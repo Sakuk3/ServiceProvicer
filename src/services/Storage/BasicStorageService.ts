@@ -8,6 +8,7 @@ export class BasicStorageService
 {
   public constructor(name: string, loggerService: LoggerService) {
     super(name, loggerService);
+    this.logger.debug("Service initialized");
   }
 
   private readonly records = new Map<string, string>();

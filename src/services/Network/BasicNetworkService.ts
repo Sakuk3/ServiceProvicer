@@ -13,10 +13,7 @@ export class BasicNetworkService
     private storageService: StorageService,
   ) {
     super(name, loggerService);
-    this.logger.debug(
-      "constructor",
-      `Network service initialized with ${this.storageService.name}`,
-    );
+    this.logger.debug(`Service initialized with ${this.storageService.name}`);
   }
 
   public request(url: string): Promise<void> {

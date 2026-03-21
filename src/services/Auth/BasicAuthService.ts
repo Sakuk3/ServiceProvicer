@@ -13,10 +13,7 @@ export class BasicAuthService
     private networkService: NetworkService,
   ) {
     super(name, loggerService);
-    this.logger.debug(
-      "constructor",
-      `Auth service initialized with ${this.networkService.name}`,
-    );
+    this.logger.debug(`Service initialized with ${this.networkService.name}`);
   }
 
   public authenticate(token: string): boolean {

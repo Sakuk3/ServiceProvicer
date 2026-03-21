@@ -1,13 +1,13 @@
 import { Service } from "./Service";
 
 export abstract class AbstractService implements Service {
-  public constructor(public readonly name: string) {}
+  protected constructor(public readonly name: string) {}
 
-  onLogin() {
-    console.log(`${this.name} logged in`);
+  async onLogin() {
+    /* empty */
   }
 
-  onLogout() {
-    console.log(`${this.name} logged out`);
+  async onLogout() {
+    /* empty */
   }
 }

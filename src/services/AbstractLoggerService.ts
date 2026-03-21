@@ -13,12 +13,4 @@ export abstract class AbstractLoggerService extends AbstractService {
     super(name);
     this.logger = scopedLoggerFactory(loggerService, scope);
   }
-
-  public override onLogin(): void {
-    this.logger.info(`${this.name} logged in`);
-  }
-
-  public override onLogout(): void {
-    this.logger.info(`${this.name} logged out`);
-  }
 }
