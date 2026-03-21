@@ -1,15 +1,16 @@
-import { AbstractService } from "../AbstractService";
+import { AbstractLoggerService } from "../AbstractLoggerService";
+import type { LoggerService } from "../Logger";
 import type { NotificationService } from "./NotificationService";
 
 export class BasicNotificationService
-  extends AbstractService
+  extends AbstractLoggerService
   implements NotificationService
 {
-  public constructor(name: string) {
-    super(name);
+  public constructor(name: string, loggerService: LoggerService) {
+    super(name, loggerService);
   }
 
   public notify(message: string): void {
-    console.log(`[${this.name}] ${message}`);
+    this.logger.info("notify", message);
   }
 }

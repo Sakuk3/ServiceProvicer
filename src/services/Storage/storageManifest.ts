@@ -9,7 +9,6 @@ export const storageManifest = defineService({
   dependencies: ["Logger"],
   factory: (deps) => {
     const { Logger } = deps;
-    console.log(`[${serviceName}] using ${Logger.name}`);
-    return new BasicStorageService(serviceName);
+    return new BasicStorageService(serviceName, Logger);
   },
 });

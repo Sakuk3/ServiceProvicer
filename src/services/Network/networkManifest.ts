@@ -9,7 +9,6 @@ export const networkManifest = defineService({
   dependencies: ["Logger", "Storage"],
   factory: (deps) => {
     const { Logger, Storage } = deps;
-    console.log(`[${serviceName}] using ${Logger.name} and ${Storage.name}`);
-    return new BasicNetworkService(serviceName);
+    return new BasicNetworkService(serviceName, Logger, Storage);
   },
 });

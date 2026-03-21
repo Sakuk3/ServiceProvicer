@@ -9,7 +9,6 @@ export const notificationManifest = defineService({
   dependencies: ["Logger"],
   factory: (deps) => {
     const { Logger } = deps;
-    console.log(`[${serviceName}] using ${Logger.name}`);
-    return new BasicNotificationService(serviceName);
+    return new BasicNotificationService(serviceName, Logger);
   },
 });

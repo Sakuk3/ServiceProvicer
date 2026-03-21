@@ -9,7 +9,6 @@ export const authManifest = defineService({
   dependencies: ["Logger", "Network"],
   factory: (deps) => {
     const { Logger, Network } = deps;
-    console.log(`[${serviceName}] using ${Logger.name} and ${Network.name}`);
-    return new BasicAuthService(serviceName);
+    return new BasicAuthService(serviceName, Logger, Network);
   },
 });

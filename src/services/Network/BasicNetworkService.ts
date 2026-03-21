@@ -1,16 +1,26 @@
-import { AbstractService } from "../AbstractService";
+import { AbstractLoggerService } from "../AbstractLoggerService";
+import type { LoggerService } from "../Logger";
 import type { NetworkService } from "./NetworkService";
+import { StorageService } from "../Storage";
 
 export class BasicNetworkService
-  extends AbstractService
+  extends AbstractLoggerService
   implements NetworkService
 {
-  public constructor(name: string) {
-    super(name);
+  public constructor(
+    name: string,
+    loggerService: LoggerService,
+    private storageService: StorageService,
+  ) {
+    super(name, loggerService);
+    this.logger.debug(
+      "constructor",
+      `Network service initialized with ${this.storageService.name}`,
+    );
   }
 
   public request(url: string): Promise<void> {
-    console.log(`[${this.name}] request to ${url}`);
+    this.logger.debug("request", `request to ${url}`);
     return Promise.resolve();
   }
 }
