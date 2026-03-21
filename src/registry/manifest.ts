@@ -1,8 +1,5 @@
-import type { ServiceKey, Services } from "./serviceTypes";
-
-export type DependencyRecord<D extends readonly ServiceKey[]> = {
-  [P in D[number]]: Services[P];
-};
+import type { Services } from "./serviceTypes";
+import type { DependencyRecord, RegistryEventName } from "./types";
 
 type FactoryFunction<
   K extends keyof Services,
@@ -13,8 +10,6 @@ type ValidDependencies<
   K extends keyof Services,
   D extends readonly (keyof Services)[],
 > = K extends D[number] ? never : D;
-
-export type RegistryEventName = "login" | "logout";
 
 type AsyncHookMethodKeys<T> = {
   [P in keyof T]-?: T[P] extends () => Promise<void> ? P : never;

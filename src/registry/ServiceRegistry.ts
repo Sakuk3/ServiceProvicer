@@ -1,60 +1,19 @@
 import { ServiceKey, Services } from "./serviceTypes";
 import {
+  CreateReadyHooksProps,
   DependencyRecord,
+  HookExecutionError,
+  HookMethodMap,
+  HookTask,
+  ReadyEntry,
+  ReadyHooks,
   RegistryEventName,
-  ServiceHooks,
-  ServiceManifest,
-} from "./manifest";
-
-interface HookTask {
-  serviceName: ServiceKey;
-  hookName: string;
-  run: () => Promise<void>;
-}
-
-interface ReadyHook {
-  methodName: string;
-  run: () => Promise<void>;
-}
-
-type ReadyHooks = Partial<Record<RegistryEventName, ReadyHook>>;
-type HookMethodMap = Partial<Record<RegistryEventName, string>>;
-
-class HookExecutionError extends Error {
-  public constructor(
-    public readonly serviceName: ServiceKey,
-    public readonly hookName: string,
-    public readonly causeReason: unknown,
-  ) {
-    super(`Hook '${hookName}' failed for service '${serviceName}'`);
-  }
-}
-
-interface WaitingEntry {
-  state: "waiting";
-  dependencies: readonly ServiceKey[];
-  hookMethods: HookMethodMap;
-  createInstance: () => Services[ServiceKey];
-}
-
-interface ReadyEntry {
-  state: "ready";
-  hooks: ReadyHooks;
-  instance: Services[ServiceKey];
-}
-
-type ServiceEntry = WaitingEntry | ReadyEntry;
-
-export interface TriggerEventFailure {
-  serviceName: ServiceKey | "Unknown";
-  hookName: string;
-  reason: unknown;
-}
-
-export interface TriggerEventResult {
-  eventName: RegistryEventName;
-  failures: readonly TriggerEventFailure[];
-}
+  ServiceEntry,
+  TriggerEventFailure,
+  TriggerEventResult,
+  WaitingEntry,
+} from "./types";
+import type { ServiceHooks, ServiceManifest } from "./manifest";
 
 export class ServiceRegistry {
   private readonly serviceStore = new Map<ServiceKey, ServiceEntry>();
@@ -242,11 +201,7 @@ export class ServiceRegistry {
     return tasks;
   }
 
-  private createReadyHooks(props: {
-    serviceName: ServiceKey;
-    instance: Services[ServiceKey];
-    hookMethods: HookMethodMap;
-  }): ReadyHooks {
+  private createReadyHooks(props: CreateReadyHooksProps): ReadyHooks {
     const { serviceName, instance, hookMethods } = props;
     const hooks: ReadyHooks = {};
 
