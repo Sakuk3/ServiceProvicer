@@ -18,8 +18,29 @@ The goal is to keep service composition explicit and predictable while keeping e
 - `ServiceRegistry` stores services in `waiting` and `ready` states
 - service manifests define `name`, `dependencies`, `hooks`, and `factory`
 - dependencies are resolved before a service instance is created
-- lifecycle events are triggered through `registry.triggerEvent(eventName)`
+- lifecycle events are triggered through `registry.triggerEvent({ name, payload? })`
 - hook failures are collected and returned as structured results
+
+### Event typing model
+
+Lifecycle events are declared in `RegistryEvents` and drive both:
+
+- the accepted `triggerEvent(...)` payload shape
+- the allowed hook method signatures in service manifests
+
+```ts
+interface RegistryEvents {
+  login: { username: string };
+  logout: undefined;
+}
+
+await registry.triggerEvent({
+  name: "login",
+  payload: { username: "demo-user" },
+});
+
+await registry.triggerEvent({ name: "logout" });
+```
 
 ## Getting started
 
@@ -94,6 +115,12 @@ registry.registerService(notificationManifest);
 registry.registerService(networkManifest);
 registry.registerService(storageManifest);
 registry.registerService(loggerManifest);
+
+await registry.triggerEvent({
+  name: "login",
+  payload: { username: "demo-user" },
+});
+await registry.triggerEvent({ name: "logout" });
 ```
 
 ## Manifest example
