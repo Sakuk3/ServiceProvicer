@@ -48,17 +48,20 @@ export type HookPolicyMap = Partial<
   Record<RegistryEventName, ResolvedLifecycleHookPolicy>
 >;
 
-export interface WaitingEntry {
+export interface WaitingEntry<
+  K extends ServiceKey = ServiceKey,
+  D extends readonly ServiceKey[] = readonly ServiceKey[],
+> {
   state: "waiting";
-  dependencies: readonly ServiceKey[];
+  dependencies: D;
   hookPolicies: HookPolicyMap;
-  createInstance: () => Services[ServiceKey];
+  createInstance: () => Services[K];
 }
 
-export interface ReadyEntry {
+export interface ReadyEntry<K extends ServiceKey = ServiceKey> {
   state: "ready";
   hooks: ReadyHooks;
-  instance: Services[ServiceKey];
+  instance: Services[K];
 }
 
 export interface FailedEntry {
@@ -68,7 +71,10 @@ export interface FailedEntry {
   errorMessage: string;
 }
 
-export type ServiceEntry = WaitingEntry | ReadyEntry | FailedEntry;
+export type ServiceEntry<
+  K extends ServiceKey = ServiceKey,
+  D extends readonly ServiceKey[] = readonly ServiceKey[],
+> = WaitingEntry<K, D> | ReadyEntry<K> | FailedEntry;
 
 export interface WaitingServiceInfo {
   name: ServiceKey;
@@ -88,9 +94,9 @@ export interface FailedServiceInfo {
 
 export type UnresolvedServiceInfo = WaitingServiceInfo | FailedServiceInfo;
 
-export interface CreateReadyHooksProps {
-  serviceName: ServiceKey;
-  instance: Services[ServiceKey];
+export interface CreateReadyHooksProps<K extends ServiceKey = ServiceKey> {
+  serviceName: K;
+  instance: Services[K];
   hookPolicies: HookPolicyMap;
 }
 

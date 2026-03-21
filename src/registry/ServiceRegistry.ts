@@ -105,14 +105,12 @@ export class ServiceRegistry {
       throw new Error(`Service '${manifest.name}' is already registered`);
     }
 
-    const waitingEntry: WaitingEntry = {
+    const waitingEntry: WaitingEntry<K, D> = {
       state: "waiting",
       dependencies: manifest.dependencies,
       hookPolicies: this.toHookPolicyMap(manifest.hooks),
       createInstance: () =>
-        manifest.factory(
-          this.buildDependencies(manifest.dependencies),
-        ) as Services[ServiceKey],
+        manifest.factory(this.buildDependencies(manifest.dependencies)),
     };
 
     this.serviceStore.set(manifest.name, waitingEntry);
@@ -128,10 +126,13 @@ export class ServiceRegistry {
   public getServiceUnsafe<K extends ServiceKey>(
     name: K,
   ): Services[K] | undefined {
-    const entry = this.serviceStore.get(name);
-    return entry?.state === "ready"
-      ? (entry.instance as Services[K])
-      : undefined;
+    const entry = this.getEntry(name);
+
+    if (entry?.state !== "ready") {
+      return undefined;
+    }
+
+    return entry.instance;
   }
 
   /**
@@ -289,7 +290,7 @@ export class ServiceRegistry {
     const result = {} as DependencyRecord<D>;
 
     for (const dep of deps) {
-      const entry = this.serviceStore.get(dep);
+      const entry = this.getEntry(dep);
 
       if (entry?.state !== "ready") {
         throw new Error(`Dependency ${dep} not ready`);
@@ -310,6 +311,10 @@ export class ServiceRegistry {
     instance: Services[K],
   ): void {
     result[dependencyName] = instance;
+  }
+
+  private getEntry<K extends ServiceKey>(name: K): ServiceEntry<K> | undefined {
+    return this.serviceStore.get(name) as ServiceEntry<K> | undefined;
   }
 
   private getMissingDependencies(
