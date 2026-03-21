@@ -2,6 +2,8 @@ import { ServiceKey, Services } from "./serviceTypes";
 import {
   CreateReadyHooksProps,
   DependencyRecord,
+  FailedEntry,
+  FailedServiceInfo,
   HookExecutionError,
   HookMethodMap,
   HookTask,
@@ -11,6 +13,8 @@ import {
   ServiceEntry,
   TriggerEventFailure,
   TriggerEventResult,
+  UnresolvedServiceInfo,
+  WaitingServiceInfo,
   WaitingEntry,
 } from "./types";
 import type { ServiceHooks, ServiceManifest } from "./manifest";
@@ -20,6 +24,69 @@ import type { ServiceHooks, ServiceManifest } from "./manifest";
  */
 export class ServiceRegistry {
   private readonly serviceStore = new Map<ServiceKey, ServiceEntry>();
+
+  /**
+   * Lists all ready service names.
+   */
+  public listReadyServices(): ServiceKey[] {
+    const readyServices: ServiceKey[] = [];
+
+    this.serviceStore.forEach((entry, serviceName) => {
+      if (entry.state === "ready") {
+        readyServices.push(serviceName);
+      }
+    });
+
+    return readyServices;
+  }
+
+  /**
+   * Lists all waiting service names.
+   */
+  public listWaitingServices(): ServiceKey[] {
+    const waitingServices: ServiceKey[] = [];
+
+    this.serviceStore.forEach((entry, serviceName) => {
+      if (entry.state === "waiting") {
+        waitingServices.push(serviceName);
+      }
+    });
+
+    return waitingServices;
+  }
+
+  /**
+   * Returns waiting and failed services with diagnostic context.
+   */
+  public getUnresolvedServices(): UnresolvedServiceInfo[] {
+    const unresolvedServices: UnresolvedServiceInfo[] = [];
+
+    this.serviceStore.forEach((entry, serviceName) => {
+      if (entry.state === "waiting") {
+        const waitingInfo: WaitingServiceInfo = {
+          name: serviceName,
+          state: "waiting",
+          dependencies: entry.dependencies,
+          missingDependencies: this.getMissingDependencies(entry.dependencies),
+        };
+        unresolvedServices.push(waitingInfo);
+        return;
+      }
+
+      if (entry.state === "failed") {
+        const failedInfo: FailedServiceInfo = {
+          name: serviceName,
+          state: "failed",
+          dependencies: entry.dependencies,
+          errorMessage: entry.errorMessage,
+          initError: entry.initError,
+        };
+        unresolvedServices.push(failedInfo);
+      }
+    });
+
+    return unresolvedServices;
+  }
 
   /**
    * Registers a service manifest and eagerly resolves any now-satisfiable services.
@@ -100,6 +167,9 @@ export class ServiceRegistry {
           failures.push({
             serviceName: reason.serviceName,
             hookName: reason.hookName,
+            eventName,
+            timestamp: new Date().toISOString(),
+            errorMessage: this.toErrorMessage(reason.causeReason),
             reason: reason.causeReason,
           });
           continue;
@@ -108,6 +178,9 @@ export class ServiceRegistry {
         failures.push({
           serviceName: "Unknown",
           hookName: "unknown",
+          eventName,
+          timestamp: new Date().toISOString(),
+          errorMessage: this.toErrorMessage(reason),
           reason,
         });
       }
@@ -152,16 +225,46 @@ export class ServiceRegistry {
 
         if (!depsReady) return;
 
-        const instance = entry.createInstance();
+        let instance: Services[ServiceKey];
+
+        try {
+          instance = entry.createInstance();
+        } catch (initError: unknown) {
+          const failedEntry: FailedEntry = {
+            state: "failed",
+            dependencies: entry.dependencies,
+            initError,
+            errorMessage: this.toErrorMessage(initError),
+          };
+          this.serviceStore.set(name, failedEntry);
+          progress = true;
+          return;
+        }
+
+        let hooks: ReadyHooks;
+
+        try {
+          hooks = this.createReadyHooks({
+            serviceName: name,
+            instance,
+            hookMethods: entry.hookMethods,
+          });
+        } catch (initError: unknown) {
+          const failedEntry: FailedEntry = {
+            state: "failed",
+            dependencies: entry.dependencies,
+            initError,
+            errorMessage: this.toErrorMessage(initError),
+          };
+          this.serviceStore.set(name, failedEntry);
+          progress = true;
+          return;
+        }
 
         const readyEntry: ReadyEntry = {
           state: "ready",
           instance,
-          hooks: this.createReadyHooks({
-            serviceName: name,
-            instance,
-            hookMethods: entry.hookMethods,
-          }),
+          hooks,
         };
 
         this.serviceStore.set(name, readyEntry);
@@ -188,11 +291,42 @@ export class ServiceRegistry {
         throw new Error(`Dependency ${dep} not ready`);
       }
 
-      (result as Record<ServiceKey, Services[ServiceKey]>)[dep] =
-        entry.instance;
+      this.assignDependency(result, dep, entry.instance);
     }
 
     return result;
+  }
+
+  private assignDependency<
+    D extends readonly ServiceKey[],
+    K extends D[number],
+  >(
+    result: DependencyRecord<D>,
+    dependencyName: K,
+    instance: Services[K],
+  ): void {
+    result[dependencyName] = instance;
+  }
+
+  private getMissingDependencies(
+    dependencies: readonly ServiceKey[],
+  ): readonly ServiceKey[] {
+    return dependencies.filter((dependencyName) => {
+      const dependencyEntry = this.serviceStore.get(dependencyName);
+      return dependencyEntry?.state !== "ready";
+    });
+  }
+
+  private toErrorMessage(reason: unknown): string {
+    if (reason instanceof Error) {
+      return reason.message;
+    }
+
+    if (typeof reason === "string") {
+      return reason;
+    }
+
+    return "Unknown error";
   }
 
   /**

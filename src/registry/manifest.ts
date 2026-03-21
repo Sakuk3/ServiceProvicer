@@ -102,5 +102,33 @@ export const defineService = <
 >(
   manifest: ServiceManifest<ServiceName, DependencyNames>,
 ) => {
+  const duplicateDependencies = getDuplicateDependencies(manifest.dependencies);
+
+  if (duplicateDependencies.length > 0) {
+    throw new Error(
+      `Service '${manifest.name}' has duplicate dependencies: ${duplicateDependencies.join(", ")}`,
+    );
+  }
+
   return manifest;
+};
+
+const getDuplicateDependencies = (
+  dependencies: readonly (keyof Services)[],
+): (keyof Services)[] => {
+  const seenDependencies = new Set<keyof Services>();
+  const duplicateDependencies: (keyof Services)[] = [];
+
+  for (const dependencyName of dependencies) {
+    if (seenDependencies.has(dependencyName)) {
+      if (!duplicateDependencies.includes(dependencyName)) {
+        duplicateDependencies.push(dependencyName);
+      }
+      continue;
+    }
+
+    seenDependencies.add(dependencyName);
+  }
+
+  return duplicateDependencies;
 };

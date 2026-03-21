@@ -9,6 +9,9 @@ export type RegistryEventName = "login" | "logout";
 export interface TriggerEventFailure {
   serviceName: ServiceKey | "Unknown";
   hookName: string;
+  eventName: RegistryEventName;
+  timestamp: string;
+  errorMessage: string;
   reason: unknown;
 }
 
@@ -44,7 +47,31 @@ export interface ReadyEntry {
   instance: Services[ServiceKey];
 }
 
-export type ServiceEntry = WaitingEntry | ReadyEntry;
+export interface FailedEntry {
+  state: "failed";
+  dependencies: readonly ServiceKey[];
+  initError: unknown;
+  errorMessage: string;
+}
+
+export type ServiceEntry = WaitingEntry | ReadyEntry | FailedEntry;
+
+export interface WaitingServiceInfo {
+  name: ServiceKey;
+  state: "waiting";
+  dependencies: readonly ServiceKey[];
+  missingDependencies: readonly ServiceKey[];
+}
+
+export interface FailedServiceInfo {
+  name: ServiceKey;
+  state: "failed";
+  dependencies: readonly ServiceKey[];
+  errorMessage: string;
+  initError: unknown;
+}
+
+export type UnresolvedServiceInfo = WaitingServiceInfo | FailedServiceInfo;
 
 export interface CreateReadyHooksProps {
   serviceName: ServiceKey;

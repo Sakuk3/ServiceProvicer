@@ -2,6 +2,7 @@ import eslint from "@eslint/js";
 import tseslint from "typescript-eslint";
 import { defineConfig } from "eslint/config";
 import prettierConfig from "eslint-config-prettier";
+import tsdoc from "eslint-plugin-tsdoc";
 
 export default defineConfig([
   eslint.configs.recommended,
@@ -13,6 +14,15 @@ export default defineConfig([
       parserOptions: {
         projectService: true,
       },
+    },
+  },
+  {
+    files: ["**/*.ts"],
+    plugins: {
+      tsdoc,
+    },
+    rules: {
+      "tsdoc/syntax": "error",
     },
   },
   {
