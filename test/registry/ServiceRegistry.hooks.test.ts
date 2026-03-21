@@ -1,0 +1,185 @@
+import { describe, expect, it, vi } from "vitest";
+import { defineService, ServiceRegistry } from "../../src/registry";
+import type { StorageService } from "../../src/services";
+import {
+  createLoggerService,
+  createStorageService,
+} from "./serviceTestFactories";
+
+describe("ServiceRegistry hooks", () => {
+  it("runs matching hooks and reports no failures on success", async () => {
+    const registry = new ServiceRegistry();
+    const logger = createLoggerService();
+    const loginHook = vi.fn(() => Promise.resolve());
+    const logoutHook = vi.fn(() => Promise.resolve());
+    const storage = createStorageService({
+      onLogin: loginHook,
+      onLogout: logoutHook,
+    });
+
+    registry.registerService(
+      defineService({
+        name: "Logger",
+        description: "logger hook test",
+        dependencies: [] as const,
+        factory: () => logger,
+      }),
+    );
+    registry.registerService(
+      defineService({
+        name: "Storage",
+        description: "storage hook test",
+        dependencies: ["Logger"] as const,
+        hooks: {
+          login: "handleLogin",
+        },
+        factory: () => storage,
+      }),
+    );
+
+    const result = await registry.triggerEvent("login");
+
+    expect(result).toEqual({ eventName: "login", failures: [] });
+    expect(loginHook).toHaveBeenCalledTimes(1);
+    expect(logoutHook).not.toHaveBeenCalled();
+    expect(logger.info).toHaveBeenCalledWith(
+      "ServiceRegistry",
+      "Triggering 'login' for 1 hook(s)",
+    );
+    expect(logger.debug).toHaveBeenCalledWith(
+      "ServiceRegistry",
+      "Event 'login' completed for service 'Storage' via 'handleLogin'",
+    );
+  });
+
+  it("captures hook failures during event triggering", async () => {
+    const registry = new ServiceRegistry();
+    const logger = createLoggerService();
+    const failure = new Error("login failed");
+    const storage = createStorageService({
+      onLogin: () => Promise.reject(failure),
+      onLogout: () => Promise.resolve(),
+    });
+
+    registry.registerService(
+      defineService({
+        name: "Logger",
+        description: "logger test service",
+        dependencies: [] as const,
+        factory: () => logger,
+      }),
+    );
+
+    registry.registerService(
+      defineService({
+        name: "Storage",
+        description: "storage test service",
+        dependencies: ["Logger"] as const,
+        hooks: {
+          login: "handleLogin",
+        },
+        factory: () => storage,
+      }),
+    );
+
+    const result = await registry.triggerEvent("login");
+
+    expect(result.eventName).toBe("login");
+    expect(result.failures).toHaveLength(1);
+    expect(result.failures[0]).toMatchObject({
+      serviceName: "Storage",
+      hookName: "handleLogin",
+      reason: failure,
+    });
+    expect(logger.warn).toHaveBeenCalledWith(
+      "ServiceRegistry",
+      "Event 'login' completed with 1 failure(s)",
+      result.failures,
+    );
+  });
+
+  it("ignores events that have no configured hook method", async () => {
+    const registry = new ServiceRegistry();
+    const logger = createLoggerService();
+    const storage = createStorageService({
+      onLogin: () => Promise.resolve(),
+      onLogout: () => Promise.resolve(),
+    });
+
+    registry.registerService(
+      defineService({
+        name: "Logger",
+        description: "logger hook test",
+        dependencies: [] as const,
+        factory: () => logger,
+      }),
+    );
+    registry.registerService(
+      defineService({
+        name: "Storage",
+        description: "storage hook test",
+        dependencies: ["Logger"] as const,
+        hooks: {
+          login: "handleLogin",
+        },
+        factory: () => storage,
+      }),
+    );
+
+    const result = await registry.triggerEvent("logout");
+
+    expect(result).toEqual({ eventName: "logout", failures: [] });
+    expect(logger.info).toHaveBeenCalledWith(
+      "ServiceRegistry",
+      "Triggering 'logout' for 0 hook(s)",
+    );
+  });
+
+  it("handles events safely when logger service is missing", async () => {
+    const registry = new ServiceRegistry();
+    const storage = createStorageService({
+      onLogin: () => Promise.resolve(),
+      onLogout: () => Promise.resolve(),
+    });
+
+    registry.registerService(
+      defineService({
+        name: "Storage",
+        description: "storage no logger test",
+        dependencies: [] as const,
+        hooks: {
+          login: "handleLogin",
+        },
+        factory: () => storage,
+      }),
+    );
+
+    const result = await registry.triggerEvent("login");
+
+    expect(result).toEqual({ eventName: "login", failures: [] });
+  });
+
+  it("throws when a configured hook is not callable on the service instance", () => {
+    const registry = new ServiceRegistry();
+    const invalidStorage = {
+      name: "Storage",
+      save: vi.fn(),
+      handleLogin: "not-a-function",
+      handleLogout: () => Promise.resolve(),
+    } as unknown as StorageService;
+
+    expect(() => {
+      registry.registerService(
+        defineService({
+          name: "Storage",
+          description: "invalid hook test",
+          dependencies: [] as const,
+          hooks: {
+            login: "handleLogin",
+          },
+          factory: () => invalidStorage,
+        }),
+      );
+    }).toThrow("Hook 'handleLogin' is not callable on service 'Storage'");
+  });
+});

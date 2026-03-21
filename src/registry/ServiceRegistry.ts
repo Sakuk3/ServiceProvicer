@@ -62,6 +62,10 @@ export class ServiceRegistry {
   public registerService<K extends ServiceKey, D extends readonly ServiceKey[]>(
     manifest: ServiceManifest<K, D>,
   ): void {
+    if (this.serviceStore.has(manifest.name)) {
+      throw new Error(`Service '${manifest.name}' is already registered`);
+    }
+
     const waitingEntry: WaitingEntry = {
       state: "waiting",
       dependencies: manifest.dependencies,
