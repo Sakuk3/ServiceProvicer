@@ -5,7 +5,6 @@ const serviceName = "Network";
 
 export const networkManifest = defineService({
   name: serviceName,
-  description: "Network service",
   dependencies: ["Logger", "Storage"],
   factory: (deps) => {
     const { Logger, Storage } = deps;

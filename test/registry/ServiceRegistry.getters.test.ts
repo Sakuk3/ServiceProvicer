@@ -26,7 +26,6 @@ describe("ServiceRegistry getters", () => {
       registry.registerService(
         defineService({
           name: "Storage",
-          description: "storage getter waiting test",
           dependencies: ["Logger"] as const,
           factory: () => storage,
         }),
@@ -47,7 +46,6 @@ describe("ServiceRegistry getters", () => {
       registry.registerService(
         defineService({
           name: "Logger",
-          description: "logger getter ready test",
           dependencies: [] as const,
           factory: () => logger,
         }),
@@ -55,7 +53,6 @@ describe("ServiceRegistry getters", () => {
       registry.registerService(
         defineService({
           name: "Storage",
-          description: "storage getter ready test",
           dependencies: ["Logger"] as const,
           factory: () => storage,
         }),
@@ -87,7 +84,6 @@ describe("ServiceRegistry getters", () => {
       registry.registerService(
         defineService({
           name: "Storage",
-          description: "storage introspection waiting test",
           dependencies: ["Logger"] as const,
           factory: () => storage,
         }),
@@ -99,7 +95,6 @@ describe("ServiceRegistry getters", () => {
       registry.registerService(
         defineService({
           name: "Logger",
-          description: "logger introspection ready test",
           dependencies: [] as const,
           factory: () => logger,
         }),
@@ -116,7 +111,6 @@ describe("ServiceRegistry getters", () => {
       registry.registerService(
         defineService({
           name: "Notification",
-          description: "notification unresolved test",
           dependencies: ["Auth", "Logger"] as const,
           factory: () => createNotificationService(),
         }),
@@ -125,7 +119,6 @@ describe("ServiceRegistry getters", () => {
       registry.registerService(
         defineService({
           name: "Auth",
-          description: "auth failed test",
           dependencies: ["Logger"] as const,
           factory: () => {
             throw new Error("Auth init failed");
@@ -136,7 +129,6 @@ describe("ServiceRegistry getters", () => {
       registry.registerService(
         defineService({
           name: "Logger",
-          description: "logger unresolved test",
           dependencies: [] as const,
           factory: () => logger,
         }),

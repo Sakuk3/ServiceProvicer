@@ -7,7 +7,6 @@ const minLogLevel: LogLevel = "debug";
 
 export const loggerManifest = defineService({
   name: serviceName,
-  description: "Application logger",
   dependencies: [],
   factory: () => {
     return new BasicLoggerService(serviceName, minLogLevel);

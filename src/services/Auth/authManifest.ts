@@ -5,7 +5,6 @@ const serviceName = "Auth";
 
 export const authManifest = defineService({
   name: serviceName,
-  description: "Authentication service",
   dependencies: ["Logger", "Network"],
   factory: (deps) => {
     const { Logger, Network } = deps;

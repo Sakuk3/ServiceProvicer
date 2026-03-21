@@ -5,7 +5,6 @@ const serviceName = "Storage";
 
 export const storageManifest = defineService({
   name: serviceName,
-  description: "Storage service",
   dependencies: ["Logger"],
   hooks: {
     login: { method: "handleLogin", retry: true },

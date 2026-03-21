@@ -29,7 +29,6 @@ describe("ServiceRegistry registration", () => {
     registry.registerService(
       defineService({
         name: "Storage",
-        description: "storage test service",
         dependencies: ["Logger"] as const,
         factory: (props) => {
           const { Logger } = props;
@@ -44,7 +43,6 @@ describe("ServiceRegistry registration", () => {
     registry.registerService(
       defineService({
         name: "Logger",
-        description: "logger test service",
         dependencies: [] as const,
         factory: () => logger,
       }),
@@ -93,7 +91,6 @@ describe("ServiceRegistry registration", () => {
     registry.registerService(
       defineService({
         name: "Notification",
-        description: "notification test service",
         dependencies: ["Auth", "Logger"] as const,
         factory: notificationFactory,
       }),
@@ -101,7 +98,6 @@ describe("ServiceRegistry registration", () => {
     registry.registerService(
       defineService({
         name: "Auth",
-        description: "auth test service",
         dependencies: ["Logger", "Network"] as const,
         factory: authFactory,
       }),
@@ -109,7 +105,6 @@ describe("ServiceRegistry registration", () => {
     registry.registerService(
       defineService({
         name: "Network",
-        description: "network test service",
         dependencies: ["Logger"] as const,
         factory: networkFactory,
       }),
@@ -122,7 +117,6 @@ describe("ServiceRegistry registration", () => {
     registry.registerService(
       defineService({
         name: "Logger",
-        description: "logger test service",
         dependencies: [] as const,
         factory: () => logger,
       }),
@@ -147,7 +141,6 @@ describe("ServiceRegistry registration", () => {
     registry.registerService(
       defineService({
         name: "Network",
-        description: "network cycle test",
         dependencies: ["Auth"] as const,
         factory: () => network,
       }),
@@ -155,7 +148,6 @@ describe("ServiceRegistry registration", () => {
     registry.registerService(
       defineService({
         name: "Auth",
-        description: "auth cycle test",
         dependencies: ["Network"] as const,
         factory: () => auth,
       }),
@@ -163,7 +155,6 @@ describe("ServiceRegistry registration", () => {
     registry.registerService(
       defineService({
         name: "Logger",
-        description: "logger test service",
         dependencies: [] as const,
         factory: () => logger,
       }),
@@ -198,7 +189,6 @@ describe("ServiceRegistry registration", () => {
     registry.registerService(
       defineService({
         name: "Storage",
-        description: "first storage registration",
         dependencies: ["Logger"] as const,
         factory: () =>
           createStorageService({
@@ -212,7 +202,6 @@ describe("ServiceRegistry registration", () => {
       registry.registerService(
         defineService({
           name: "Storage",
-          description: "second storage registration",
           dependencies: [] as const,
           factory: () =>
             createStorageService({
@@ -230,7 +219,6 @@ describe("ServiceRegistry registration", () => {
     registry.registerService(
       defineService({
         name: "Logger",
-        description: "logger registration",
         dependencies: [] as const,
         factory: () => createLoggerService(),
       }),
@@ -240,7 +228,6 @@ describe("ServiceRegistry registration", () => {
       registry.registerService(
         defineService({
           name: "Logger",
-          description: "logger duplicate",
           dependencies: [] as const,
           factory: () => createLoggerService(),
         }),
@@ -255,7 +242,6 @@ describe("ServiceRegistry registration", () => {
     registry.registerService(
       defineService({
         name: "Auth",
-        description: "auth init failure test",
         dependencies: ["Logger"] as const,
         factory: () => {
           throw new Error("Auth factory failed");
@@ -266,7 +252,6 @@ describe("ServiceRegistry registration", () => {
     registry.registerService(
       defineService({
         name: "Logger",
-        description: "logger dependency for auth failure",
         dependencies: [] as const,
         factory: () => logger,
       }),
@@ -299,7 +284,6 @@ describe("ServiceRegistry registration", () => {
     registry.registerService(
       defineService({
         name: "Notification",
-        description: "notification unresolved dependencies test",
         dependencies: ["Auth", "Logger"] as const,
         factory: () => createNotificationService(),
       }),
@@ -308,7 +292,6 @@ describe("ServiceRegistry registration", () => {
     registry.registerService(
       defineService({
         name: "Logger",
-        description: "logger for unresolved diagnostics",
         dependencies: [] as const,
         factory: () => logger,
       }),
@@ -329,7 +312,6 @@ describe("ServiceRegistry registration", () => {
     expect(() => {
       defineService({
         name: "Storage",
-        description: "duplicate dependency test",
         dependencies: ["Logger", "Logger"] as const,
         factory: () =>
           createStorageService({

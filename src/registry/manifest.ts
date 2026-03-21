@@ -59,7 +59,6 @@ export interface ServiceManifest<
   DependencyNames extends readonly (keyof Services)[],
 > {
   name: ServiceName;
-  description: string;
   /**
    * Ordered dependency names required before this service can be constructed.
    *
@@ -82,7 +81,6 @@ export interface ServiceManifest<
  * ```ts
  * const authManifest = defineService({
  *   name: "Auth",
- *   description: "Authentication service",
  *   dependencies: [] as const,
  *   hooks: {
  *     login: { method: "login", retry: true },
@@ -96,7 +94,6 @@ export interface ServiceManifest<
  * ```ts
  * const notificationManifest = defineService({
  *   name: "Notification",
- *   description: "Sends notifications over network",
  *   dependencies: ["Logger", "Network"] as const,
  *   hooks: {
  *     login: { method: "onLogin" },

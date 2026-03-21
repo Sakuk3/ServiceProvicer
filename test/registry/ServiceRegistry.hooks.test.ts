@@ -20,7 +20,6 @@ describe("ServiceRegistry hooks", () => {
     registry.registerService(
       defineService({
         name: "Logger",
-        description: "logger hook test",
         dependencies: [] as const,
         factory: () => logger,
       }),
@@ -28,7 +27,6 @@ describe("ServiceRegistry hooks", () => {
     registry.registerService(
       defineService({
         name: "Storage",
-        description: "storage hook test",
         dependencies: ["Logger"] as const,
         hooks: {
           login: { method: "handleLogin" },
@@ -64,7 +62,6 @@ describe("ServiceRegistry hooks", () => {
     registry.registerService(
       defineService({
         name: "Logger",
-        description: "logger test service",
         dependencies: [] as const,
         factory: () => logger,
       }),
@@ -73,7 +70,6 @@ describe("ServiceRegistry hooks", () => {
     registry.registerService(
       defineService({
         name: "Storage",
-        description: "storage test service",
         dependencies: ["Logger"] as const,
         hooks: {
           login: { method: "handleLogin" },
@@ -112,7 +108,6 @@ describe("ServiceRegistry hooks", () => {
     registry.registerService(
       defineService({
         name: "Logger",
-        description: "logger hook test",
         dependencies: [] as const,
         factory: () => logger,
       }),
@@ -120,7 +115,6 @@ describe("ServiceRegistry hooks", () => {
     registry.registerService(
       defineService({
         name: "Storage",
-        description: "storage hook test",
         dependencies: ["Logger"] as const,
         hooks: {
           login: { method: "handleLogin" },
@@ -148,7 +142,6 @@ describe("ServiceRegistry hooks", () => {
     registry.registerService(
       defineService({
         name: "Storage",
-        description: "storage no logger test",
         dependencies: [] as const,
         hooks: {
           login: { method: "handleLogin" },
@@ -174,7 +167,6 @@ describe("ServiceRegistry hooks", () => {
     registry.registerService(
       defineService({
         name: "Storage",
-        description: "invalid hook test",
         dependencies: [] as const,
         hooks: {
           login: { method: "handleLogin" },
@@ -209,7 +201,6 @@ describe("ServiceRegistry hooks", () => {
     registry.registerService(
       defineService({
         name: "Logger",
-        description: "logger non-error hook test",
         dependencies: [] as const,
         factory: () => logger,
       }),
@@ -217,7 +208,6 @@ describe("ServiceRegistry hooks", () => {
     registry.registerService(
       defineService({
         name: "Storage",
-        description: "storage non-error hook test",
         dependencies: ["Logger"] as const,
         hooks: {
           login: { method: "handleLogin" },
@@ -255,7 +245,6 @@ describe("ServiceRegistry hooks", () => {
     registry.registerService(
       defineService({
         name: "Logger",
-        description: "logger retry hook test",
         dependencies: [] as const,
         factory: () => logger,
       }),
@@ -263,7 +252,6 @@ describe("ServiceRegistry hooks", () => {
     registry.registerService(
       defineService({
         name: "Storage",
-        description: "storage retry hook test",
         dependencies: ["Logger"] as const,
         hooks: {
           login: { method: "handleLogin", retry: true },
@@ -291,7 +279,6 @@ describe("ServiceRegistry hooks", () => {
     registry.registerService(
       defineService({
         name: "Logger",
-        description: "logger timeout hook test",
         dependencies: [] as const,
         factory: () => logger,
       }),
@@ -299,7 +286,6 @@ describe("ServiceRegistry hooks", () => {
     registry.registerService(
       defineService({
         name: "Storage",
-        description: "storage no retry hook test",
         dependencies: ["Logger"] as const,
         hooks: {
           login: { method: "handleLogin" },
