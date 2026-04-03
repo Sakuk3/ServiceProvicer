@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { defineService, ServiceRegistry } from "../../src/registry";
-import type { FailedServiceInfo } from "../../src/registry";
+import { defineService, ServiceRegistry } from "../../src";
+import type { FailedServiceInfo } from "../../src";
 import {
   createLoggerService,
   createNotificationService,
@@ -166,6 +166,80 @@ describe("ServiceRegistry getters", () => {
         errorMessage: "Auth init failed",
       });
       expect(failedAuthService.initError).toBeInstanceOf(Error);
+    });
+
+    it("returns dependency graph data for console visualization", () => {
+      const registry = new ServiceRegistry();
+      const logger = createLoggerService();
+
+      registry.registerService(
+        defineService({
+          name: "Notification",
+          dependencies: ["Auth", "Logger"] as const,
+          factory: () => createNotificationService(),
+        }),
+      );
+
+      registry.registerService(
+        defineService({
+          name: "Auth",
+          dependencies: ["Logger"] as const,
+          factory: () => {
+            throw new Error("Auth init failed");
+          },
+        }),
+      );
+
+      registry.registerService(
+        defineService({
+          name: "Logger",
+          dependencies: [] as const,
+          factory: () => logger,
+        }),
+      );
+
+      expect(registry.getDependencyGraph()).toEqual({
+        nodes: [
+          {
+            name: "Notification",
+            state: "waiting",
+            dependencies: ["Auth", "Logger"],
+            missingDependencies: ["Auth"],
+          },
+          {
+            name: "Auth",
+            state: "failed",
+            dependencies: ["Logger"],
+            missingDependencies: [],
+          },
+          {
+            name: "Logger",
+            state: "ready",
+            dependencies: [],
+            missingDependencies: [],
+          },
+        ],
+        edges: [
+          {
+            from: "Notification",
+            to: "Auth",
+            isRegistered: true,
+            isReady: false,
+          },
+          {
+            from: "Notification",
+            to: "Logger",
+            isRegistered: true,
+            isReady: true,
+          },
+          {
+            from: "Auth",
+            to: "Logger",
+            isRegistered: true,
+            isReady: true,
+          },
+        ],
+      });
     });
   });
 });

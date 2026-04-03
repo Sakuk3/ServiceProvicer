@@ -5,6 +5,7 @@ import {
   notificationManifest,
   storageManifest,
   ServiceRegistry,
+  visualizeServiceDependencyGraph,
 } from "../src";
 
 const registry = new ServiceRegistry();
@@ -27,6 +28,8 @@ const bootstrap = async (): Promise<void> => {
   if (loginResult.failures.length > 0 || logoutResult.failures.length > 0) {
     throw new Error("Lifecycle events completed with failures");
   }
+
+  visualizeServiceDependencyGraph(registry.getDependencyGraph());
 };
 
 void bootstrap();

@@ -7,6 +7,9 @@ import type {
   HookTask,
   LifecycleHookPolicy,
   ResolvedLifecycleHookPolicy,
+  ServiceDependencyGraph,
+  ServiceDependencyGraphEdge,
+  ServiceDependencyGraphNode,
   ReadyEntry,
   ReadyHooks,
   RegistryEvent,
@@ -66,6 +69,41 @@ export class ServiceRegistry {
     });
 
     return unresolvedServices;
+  }
+
+  /**
+   * Returns a structured dependency graph of all registered services.
+   */
+  public getDependencyGraph(): ServiceDependencyGraph {
+    const nodes: ServiceDependencyGraphNode[] = [];
+    const edges: ServiceDependencyGraphEdge[] = [];
+
+    this.entriesByService.forEach((entry, serviceName) => {
+      const { dependencies } = entry;
+
+      nodes.push({
+        name: serviceName,
+        state: entry.state,
+        dependencies,
+        missingDependencies: this.getMissingDependencies(dependencies),
+      });
+
+      dependencies.forEach((dependencyName) => {
+        const dependencyEntry = this.entriesByService.get(dependencyName);
+
+        edges.push({
+          from: serviceName,
+          to: dependencyName,
+          isRegistered: dependencyEntry !== undefined,
+          isReady: dependencyEntry?.state === "ready",
+        });
+      });
+    });
+
+    return {
+      nodes,
+      edges,
+    };
   }
 
   /**
@@ -297,6 +335,7 @@ export class ServiceRegistry {
 
       return {
         state: "ready",
+        dependencies: entry.dependencies,
         instance,
         hooks,
       };

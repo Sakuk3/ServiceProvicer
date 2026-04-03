@@ -84,6 +84,7 @@ export interface WaitingEntry<
 
 export interface ReadyEntry<K extends ServiceKey = ServiceKey> {
   state: "ready";
+  dependencies: readonly ServiceKey[];
   hooks: ReadyHooks;
   instance: Services[K];
 }
@@ -117,6 +118,27 @@ export interface FailedServiceInfo {
 }
 
 export type UnresolvedServiceInfo = WaitingServiceInfo | FailedServiceInfo;
+
+export type ServiceDependencyGraphNodeState = "waiting" | "ready" | "failed";
+
+export interface ServiceDependencyGraphNode {
+  name: ServiceKey;
+  state: ServiceDependencyGraphNodeState;
+  dependencies: readonly ServiceKey[];
+  missingDependencies: readonly ServiceKey[];
+}
+
+export interface ServiceDependencyGraphEdge {
+  from: ServiceKey;
+  to: ServiceKey;
+  isRegistered: boolean;
+  isReady: boolean;
+}
+
+export interface ServiceDependencyGraph {
+  nodes: readonly ServiceDependencyGraphNode[];
+  edges: readonly ServiceDependencyGraphEdge[];
+}
 
 export interface CreateReadyHooksProps<K extends ServiceKey = ServiceKey> {
   serviceName: K;

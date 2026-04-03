@@ -21,6 +21,8 @@ The goal is to keep service composition explicit and predictable while keeping e
 - registering a service that introduces a cycle throws `ServiceRegistryCircularDependencyError`
 - lifecycle events are triggered through `registry.triggerEvent({ name, payload? })`
 - hook failures are collected and returned as structured results
+- dependency graph data is available via `registry.getDependencyGraph()` for custom visualizers
+- `visualizeServiceDependencyGraph(...)` prints a readable dependency graph in the console
 
 When cycle detection fails, `registerService(...)` throws with a stable message and
 includes a `cyclePath` property to aid diagnostics, for example:
@@ -45,6 +47,22 @@ await registry.triggerEvent({
 });
 
 await registry.triggerEvent({ name: "logout" });
+
+visualizeServiceDependencyGraph(registry.getDependencyGraph());
+```
+
+Example output from `examples/demo.ts`:
+
+```text
+Service dependency graph (single view, service -> dependency)
+├─ Auth [ready]
+│  ├─> Logger [ready]
+│  └─> Network [ready]
+│     ├─> Logger [ready] [ref]
+│     └─> Storage [ready]
+│        └─> Logger [ready] [ref]
+└─ Notification [ready]
+   └─> Logger [ready] [ref]
 ```
 
 ## Getting started
@@ -111,6 +129,7 @@ import {
   notificationManifest,
   storageManifest,
   ServiceRegistry,
+  visualizeServiceDependencyGraph,
 } from "service-provider-registry";
 
 const registry = new ServiceRegistry();
@@ -126,6 +145,8 @@ await registry.triggerEvent({
   payload: { username: "demo-user" },
 });
 await registry.triggerEvent({ name: "logout" });
+
+visualizeServiceDependencyGraph(registry.getDependencyGraph());
 ```
 
 ## Manifest example
