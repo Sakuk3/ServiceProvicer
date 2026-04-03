@@ -18,7 +18,13 @@ import type {
   UnresolvedServiceInfo,
   WaitingEntry,
 } from "./types";
-import { HookExecutionError } from "./types";
+import {
+  HookExecutionError,
+  ServiceAlreadyRegisteredError,
+  ServiceDependencyNotReadyError,
+  ServiceHookNotCallableError,
+  ServiceRegistryCircularDependencyError,
+} from "./errors";
 import type { ServiceHooks, ServiceManifest } from "./manifest";
 
 /**
@@ -73,7 +79,7 @@ export class ServiceRegistry {
     const { name, dependencies, hooks, factory } = manifest;
 
     if (this.entriesByService.has(name)) {
-      throw new Error(`Service '${name}' is already registered`);
+      throw new ServiceAlreadyRegisteredError(name);
     }
 
     const waitingEntry: WaitingEntry<K, D> = {
@@ -84,6 +90,14 @@ export class ServiceRegistry {
     };
 
     this.entriesByService.set(name, waitingEntry);
+
+    const cyclePath = this.getCyclePath(name);
+
+    if (cyclePath !== undefined) {
+      // Keep registration atomic when the new manifest introduces a cycle.
+      this.entriesByService.delete(name);
+      throw new ServiceRegistryCircularDependencyError(cyclePath);
+    }
 
     this.tryResolveAll();
   }
@@ -178,7 +192,7 @@ export class ServiceRegistry {
       const entry = this.getEntry(dependencyName);
 
       if (entry?.state !== "ready") {
-        throw new Error(`Dependency ${dependencyName} not ready`);
+        throw new ServiceDependencyNotReadyError(dependencyName);
       }
 
       this.assignDependency({
@@ -400,9 +414,7 @@ export class ServiceRegistry {
       ];
 
       if (typeof candidate !== "function") {
-        throw new Error(
-          `Hook '${methodName}' is not callable on service '${serviceName}'`,
-        );
+        throw new ServiceHookNotCallableError(serviceName, methodName);
       }
 
       const method = candidate as (...args: unknown[]) => Promise<void>;

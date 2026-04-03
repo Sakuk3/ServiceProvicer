@@ -123,13 +123,3 @@ export interface CreateReadyHooksProps<K extends ServiceKey = ServiceKey> {
   instance: Services[K];
   hookPolicies: HookPolicyMap;
 }
-
-export class HookExecutionError extends Error {
-  public constructor(
-    public readonly serviceName: ServiceKey,
-    public readonly hookName: string,
-    public readonly causeReason: unknown,
-  ) {
-    super(`Hook '${hookName}' failed for service '${serviceName}'`);
-  }
-}

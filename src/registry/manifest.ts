@@ -1,4 +1,5 @@
 import type { Services } from "./serviceTypes";
+import { ServiceManifestDuplicateDependenciesError } from "./errors";
 import type {
   DependencyRecord,
   LifecycleHookPolicy,
@@ -110,8 +111,9 @@ export const defineService = <
   const duplicateDependencies = getDuplicateDependencies(manifest.dependencies);
 
   if (duplicateDependencies.length > 0) {
-    throw new Error(
-      `Service '${manifest.name}' has duplicate dependencies: ${duplicateDependencies.join(", ")}`,
+    throw new ServiceManifestDuplicateDependenciesError(
+      manifest.name,
+      duplicateDependencies,
     );
   }
 

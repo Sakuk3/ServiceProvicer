@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   defineService,
+  ServiceAlreadyRegisteredError,
+  ServiceManifestDuplicateDependenciesError,
+  ServiceRegistryCircularDependencyError,
+  ServiceRegistryError,
   ServiceRegistry,
   type AuthService,
   type FailedServiceInfo,
@@ -14,6 +18,22 @@ import {
   createNotificationService,
   createStorageService,
 } from "./serviceTestFactories";
+
+const getThrownError = (callback: () => void): Error => {
+  try {
+    callback();
+  } catch (error: unknown) {
+    if (error instanceof Error) {
+      return error;
+    }
+
+    throw new Error("Expected registration callback to throw an Error", {
+      cause: error,
+    });
+  }
+
+  throw new Error("Expected registration callback to throw");
+};
 
 describe("ServiceRegistry registration", () => {
   it("awaits dependencies when services are registered out of order", () => {
@@ -128,7 +148,7 @@ describe("ServiceRegistry registration", () => {
     expect(notificationFactory).toHaveBeenCalledTimes(1);
   });
 
-  it("keeps cyclic dependencies in waiting state", () => {
+  it("throws when registration introduces a circular dependency chain", () => {
     const registry = new ServiceRegistry();
     const logger = createLoggerService();
     const network = createNetworkService({
@@ -143,13 +163,48 @@ describe("ServiceRegistry registration", () => {
         factory: () => network,
       }),
     );
-    registry.registerService(
-      defineService({
-        name: "Auth",
-        dependencies: ["Network"] as const,
-        factory: () => auth,
-      }),
+
+    const registerAuth = () => {
+      registry.registerService(
+        defineService({
+          name: "Auth",
+          dependencies: ["Network"] as const,
+          factory: () => auth,
+        }),
+      );
+    };
+
+    expect(registerAuth).toThrow(
+      "Circular dependency detected: Auth -> Network -> Auth",
     );
+
+    let registrationError: Error | undefined;
+
+    try {
+      registerAuth();
+    } catch (error: unknown) {
+      if (error instanceof Error) {
+        registrationError = error;
+      }
+    }
+
+    if (registrationError === undefined) {
+      throw new Error("Expected circular dependency registration to throw");
+    }
+
+    expect(registrationError).toBeInstanceOf(ServiceRegistryError);
+    expect(registrationError).toBeInstanceOf(
+      ServiceRegistryCircularDependencyError,
+    );
+    expect(registrationError.name).toBe(
+      "ServiceRegistryCircularDependencyError",
+    );
+    expect(registrationError).toHaveProperty("cyclePath", [
+      "Auth",
+      "Network",
+      "Auth",
+    ]);
+
     registry.registerService(
       defineService({
         name: "Logger",
@@ -161,24 +216,17 @@ describe("ServiceRegistry registration", () => {
     expect(registry.getServiceUnsafe("Network")).toBeUndefined();
     expect(registry.getServiceUnsafe("Auth")).toBeUndefined();
     expect(registry.getServiceUnsafe("Logger")).toBe(logger);
-    expect(registry.getUnresolvedServices()).toEqual(
-      expect.arrayContaining([
-        {
-          name: "Network",
-          state: "waiting",
-          dependencies: ["Auth"],
-          missingDependencies: ["Auth"],
-          cyclePath: ["Network", "Auth", "Network"],
-        },
-        {
-          name: "Auth",
-          state: "waiting",
-          dependencies: ["Network"],
-          missingDependencies: ["Network"],
-          cyclePath: ["Auth", "Network", "Auth"],
-        },
-      ]),
-    );
+
+    // Registering Auth fails, so only the original waiting service remains.
+    expect(registry.listWaitingServices()).toEqual(["Network"]);
+    expect(registry.getUnresolvedServices()).toEqual([
+      {
+        name: "Network",
+        state: "waiting",
+        dependencies: ["Auth"],
+        missingDependencies: ["Auth"],
+      },
+    ]);
   });
 
   it("rejects duplicate service registration while the original service is waiting", () => {
@@ -196,7 +244,7 @@ describe("ServiceRegistry registration", () => {
       }),
     );
 
-    expect(() => {
+    const registerDuplicateStorage = () => {
       registry.registerService(
         defineService({
           name: "Storage",
@@ -208,7 +256,14 @@ describe("ServiceRegistry registration", () => {
             }),
         }),
       );
-    }).toThrow("Service 'Storage' is already registered");
+    };
+
+    expect(registerDuplicateStorage).toThrow(
+      "Service 'Storage' is already registered",
+    );
+    const duplicateStorageError = getThrownError(registerDuplicateStorage);
+    expect(duplicateStorageError).toBeInstanceOf(ServiceAlreadyRegisteredError);
+    expect(duplicateStorageError).toBeInstanceOf(ServiceRegistryError);
   });
 
   it("rejects duplicate service registration after the original service is ready", () => {
@@ -222,7 +277,7 @@ describe("ServiceRegistry registration", () => {
       }),
     );
 
-    expect(() => {
+    const registerDuplicateLogger = () => {
       registry.registerService(
         defineService({
           name: "Logger",
@@ -230,7 +285,14 @@ describe("ServiceRegistry registration", () => {
           factory: () => createLoggerService(),
         }),
       );
-    }).toThrow("Service 'Logger' is already registered");
+    };
+
+    expect(registerDuplicateLogger).toThrow(
+      "Service 'Logger' is already registered",
+    );
+    const duplicateLoggerError = getThrownError(registerDuplicateLogger);
+    expect(duplicateLoggerError).toBeInstanceOf(ServiceAlreadyRegisteredError);
+    expect(duplicateLoggerError).toBeInstanceOf(ServiceRegistryError);
   });
 
   it("marks a service as failed when its factory throws after dependencies are ready", () => {
@@ -307,7 +369,7 @@ describe("ServiceRegistry registration", () => {
   });
 
   it("rejects manifests with duplicate dependency entries", () => {
-    expect(() => {
+    const registerInvalidManifest = () => {
       defineService({
         name: "Storage",
         dependencies: ["Logger", "Logger"] as const,
@@ -317,6 +379,15 @@ describe("ServiceRegistry registration", () => {
             onLogout: () => Promise.resolve(),
           }),
       });
-    }).toThrow("Service 'Storage' has duplicate dependencies: Logger");
+    };
+
+    expect(registerInvalidManifest).toThrow(
+      "Service 'Storage' has duplicate dependencies: Logger",
+    );
+    const invalidManifestError = getThrownError(registerInvalidManifest);
+    expect(invalidManifestError).toBeInstanceOf(
+      ServiceManifestDuplicateDependenciesError,
+    );
+    expect(invalidManifestError).toBeInstanceOf(ServiceRegistryError);
   });
 });

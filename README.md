@@ -18,8 +18,13 @@ The goal is to keep service composition explicit and predictable while keeping e
 - `ServiceRegistry` stores services in `waiting` and `ready` states
 - service manifests define `name`, `dependencies`, `hooks`, and `factory`
 - dependencies are resolved before a service instance is created
+- registering a service that introduces a cycle throws `ServiceRegistryCircularDependencyError`
 - lifecycle events are triggered through `registry.triggerEvent({ name, payload? })`
 - hook failures are collected and returned as structured results
+
+When cycle detection fails, `registerService(...)` throws with a stable message and
+includes a `cyclePath` property to aid diagnostics, for example:
+`Auth -> Network -> Auth`.
 
 ### Event typing model
 
