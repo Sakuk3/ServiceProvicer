@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { defineService, ServiceRegistry } from "../../src";
-import type { FailedServiceInfo } from "../../src";
+import type {
+  BuildDependencyGraphProps,
+  DependencyGraphBehavior,
+  FailedServiceInfo,
+} from "../../src";
 import {
   createLoggerService,
   createNotificationService,
@@ -240,6 +244,27 @@ describe("ServiceRegistry getters", () => {
           },
         ],
       });
+    });
+
+    it("delegates dependency graph building to injected behavior", () => {
+      const expectedGraph = {
+        nodes: [],
+        edges: [],
+      } as const;
+
+      const stubDependencyGraphBehavior: DependencyGraphBehavior = {
+        buildDependencyGraph: (props: BuildDependencyGraphProps) => {
+          const { entriesByService } = props;
+          expect(entriesByService).toBeInstanceOf(Map);
+          return expectedGraph;
+        },
+      };
+
+      const registry = new ServiceRegistry({
+        dependencyGraphBehavior: stubDependencyGraphBehavior,
+      });
+
+      expect(registry.getDependencyGraph()).toBe(expectedGraph);
     });
   });
 });

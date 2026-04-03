@@ -5,3 +5,4 @@ export * from "./ServiceRegistry";
 export * from "./visualizeServiceDependencyGraph";
 export * from "./registryEventTypes";
 export * from "./errors";
+export * from "./behaviors";
