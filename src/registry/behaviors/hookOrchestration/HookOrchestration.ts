@@ -1,4 +1,4 @@
-import type { ServiceKey, Services } from "../../serviceTypes";
+import type { ServiceKey } from "../../serviceTypes";
 import type {
   RegistryEvent,
   RegistryEventName,
@@ -9,7 +9,6 @@ import type {
 export interface TriggerRegistryEventProps<E extends RegistryEventName> {
   entriesByService: ReadonlyMap<ServiceKey, ServiceEntry>;
   event: RegistryEvent<E>;
-  logger: Services["Logger"] | undefined;
 }
 
 export interface HookOrchestration {

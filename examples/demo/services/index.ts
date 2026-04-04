@@ -1,5 +1,3 @@
-export * from "./Service";
-export * from "./AbstractService";
 export * from "./AbstractLoggerService";
 
 export * from "./Auth";

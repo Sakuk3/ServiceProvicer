@@ -1,7 +1,7 @@
 import { AbstractLoggerService } from "../AbstractLoggerService";
 import type { LoggerService } from "../Logger";
 import type { AuthService } from "./AuthService";
-import { NetworkService } from "../Network";
+import type { NetworkService } from "../Network";
 
 export class BasicAuthService
   extends AbstractLoggerService

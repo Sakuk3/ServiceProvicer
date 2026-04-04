@@ -1,5 +1,7 @@
 export * from "./manifest";
 export * from "./serviceTypes";
+export * from "./Service";
+export * from "./AbstractService";
 export * from "./types";
 export * from "./ServiceRegistry";
 export * from "./visualizeServiceDependencyGraph";

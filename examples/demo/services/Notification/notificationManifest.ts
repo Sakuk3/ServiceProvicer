@@ -1,4 +1,4 @@
-import { defineService } from "../../registry";
+import { defineService } from "../../../../src";
 import { BasicNotificationService } from "./BasicNotificationService";
 
 const serviceName = "Notification";

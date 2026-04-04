@@ -1,17 +1,10 @@
-import type {
-  LoggerService,
-  NetworkService,
-  NotificationService,
-  StorageService,
-  AuthService,
-} from "../services";
-
 export interface Services {
-  Logger: LoggerService;
-  Storage: StorageService;
-  Network: NetworkService;
-  Auth: AuthService;
-  Notification: NotificationService;
+  readonly __servicesExtensionPoint__?: never;
 }
 
-export type ServiceKey = keyof Services;
+type AugmentedServiceKey = Exclude<
+  keyof Services,
+  "__servicesExtensionPoint__"
+>;
+
+export type ServiceKey = AugmentedServiceKey;

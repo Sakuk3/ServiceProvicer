@@ -1,7 +1,7 @@
 import { AbstractLoggerService } from "../AbstractLoggerService";
 import type { LoggerService } from "../Logger";
 import type { NetworkService } from "./NetworkService";
-import { StorageService } from "../Storage";
+import type { StorageService } from "../Storage";
 
 export class BasicNetworkService
   extends AbstractLoggerService

@@ -170,11 +170,9 @@ export class ServiceRegistry {
   public async triggerEvent<E extends RegistryEventName>(
     event: RegistryEvent<E>,
   ): Promise<TriggerEventResult<E>> {
-    const logger = this.getServiceUnsafe("Logger");
     return this.hookOrchestration.triggerEvent({
       entriesByService: this.entriesByService,
       event,
-      logger,
     });
   }
 

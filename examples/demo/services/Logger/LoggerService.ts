@@ -1,4 +1,4 @@
-import type { Service } from "../Service";
+import type { Service } from "../../../../src";
 
 export type LogLevel = "debug" | "info" | "warn" | "error";
 

@@ -6,11 +6,13 @@ import {
   ServiceRegistryCircularDependencyError,
   ServiceRegistryError,
   ServiceRegistry,
-  type AuthService,
   type FailedServiceInfo,
-  type LoggerService,
-  type NetworkService,
 } from "../../src";
+import type {
+  AuthService,
+  LoggerService,
+  NetworkService,
+} from "./testTypeExtensions";
 import {
   createAuthService,
   createLoggerService,

@@ -1,19 +1,101 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  BaseHookOrchestration,
   defineService,
+  type HookTask,
   type LoginEventPayload,
+  type RegistryEventName,
   ServiceRegistry,
-  type StorageService,
+  type TriggerEventFailure,
 } from "../../src";
+import type { LoggerService, StorageService } from "./testTypeExtensions";
 import {
   createLoggerService,
   createStorageService,
 } from "./serviceTestFactories";
 
+class LoggerServiceHookOrchestration extends BaseHookOrchestration {
+  public constructor(logger: LoggerService | undefined) {
+    super({ hookRetryAttempts: 1 });
+    this.logger = logger;
+  }
+
+  private readonly logger: LoggerService | undefined;
+
+  protected override onTriggerStart<E extends RegistryEventName>(props: {
+    eventName: E;
+    tasks: readonly HookTask<E>[];
+  }): void {
+    const { eventName, tasks } = props;
+    this.info(
+      "ServiceRegistry",
+      `Triggering '${eventName}' for ${String(tasks.length)} hook(s)`,
+    );
+  }
+
+  protected override onHookTaskSuccess<E extends RegistryEventName>(props: {
+    eventName: E;
+    task: HookTask<E>;
+  }): void {
+    const { eventName, task } = props;
+    const { serviceName, hookName } = task;
+
+    this.debug(
+      "ServiceRegistry",
+      `Event '${eventName}' completed for service '${serviceName}' via '${hookName}'`,
+    );
+  }
+
+  protected override onTriggerComplete<E extends RegistryEventName>(props: {
+    eventName: E;
+    failures: readonly TriggerEventFailure<E>[];
+  }): void {
+    const { eventName, failures } = props;
+
+    if (failures.length === 0) {
+      this.info(
+        "ServiceRegistry",
+        `Event '${eventName}' completed successfully`,
+      );
+      return;
+    }
+
+    this.warn(
+      "ServiceRegistry",
+      `Event '${eventName}' completed with ${String(failures.length)} failure(s)`,
+      failures,
+    );
+  }
+
+  public debug(scope: string, ...args: unknown[]): void {
+    this.logger?.debug(scope, ...args);
+  }
+
+  public info(scope: string, ...args: unknown[]): void {
+    this.logger?.info(scope, ...args);
+  }
+
+  public warn(scope: string, ...args: unknown[]): void {
+    this.logger?.warn(scope, ...args);
+  }
+
+  public error(scope: string, ...args: unknown[]): void {
+    this.logger?.error(scope, ...args);
+  }
+}
+
+const createRegistryWithLoggerBehavior = (
+  logger: LoggerService | undefined,
+): ServiceRegistry => {
+  return new ServiceRegistry({
+    hookOrchestration: new LoggerServiceHookOrchestration(logger),
+  });
+};
+
 describe("ServiceRegistry hooks", () => {
   it("runs matching hooks and reports no failures on success", async () => {
-    const registry = new ServiceRegistry();
     const logger = createLoggerService();
+    const registry = createRegistryWithLoggerBehavior(logger);
     const loginPayload = { username: "alice" };
     const loginHook = vi
       .fn<(payload: LoginEventPayload) => Promise<void>>()
@@ -62,8 +144,8 @@ describe("ServiceRegistry hooks", () => {
   });
 
   it("captures hook failures during event triggering", async () => {
-    const registry = new ServiceRegistry();
     const logger = createLoggerService();
+    const registry = createRegistryWithLoggerBehavior(logger);
     const failure = new Error("login failed");
     const storage = createStorageService({
       onLogin: () => Promise.reject(failure),
@@ -112,8 +194,8 @@ describe("ServiceRegistry hooks", () => {
   });
 
   it("ignores events that have no configured hook method", async () => {
-    const registry = new ServiceRegistry();
     const logger = createLoggerService();
+    const registry = createRegistryWithLoggerBehavior(logger);
     const storage = createStorageService({
       onLogin: () => Promise.resolve(),
       onLogout: () => Promise.resolve(),
@@ -204,8 +286,8 @@ describe("ServiceRegistry hooks", () => {
   });
 
   it("normalizes non-Error hook rejection shapes in failures", async () => {
-    const registry = new ServiceRegistry();
     const logger = createLoggerService();
+    const registry = createRegistryWithLoggerBehavior(logger);
     const nonErrorReason = { code: "E_HOOK", detail: "failed" };
     const storage = createStorageService({
       onLogin: () =>
@@ -250,8 +332,8 @@ describe("ServiceRegistry hooks", () => {
   });
 
   it("retries a failing hook when retry is enabled", async () => {
-    const registry = new ServiceRegistry();
     const logger = createLoggerService();
+    const registry = createRegistryWithLoggerBehavior(logger);
     const failure = new Error("transient login failure");
     const loginHook = vi
       .fn<(payload: LoginEventPayload) => Promise<void>>()
@@ -290,8 +372,8 @@ describe("ServiceRegistry hooks", () => {
   });
 
   it("does not retry a failing hook when retry is not enabled", async () => {
-    const registry = new ServiceRegistry();
     const logger = createLoggerService();
+    const registry = createRegistryWithLoggerBehavior(logger);
     const failure = new Error("single attempt failure");
     const loginHook = vi
       .fn<(payload: LoginEventPayload) => Promise<void>>()

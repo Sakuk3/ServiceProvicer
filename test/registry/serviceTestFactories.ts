@@ -2,11 +2,11 @@ import { vi } from "vitest";
 import type {
   AuthService,
   LoggerService,
-  LoginEventPayload,
   NetworkService,
   NotificationService,
   StorageService,
-} from "../../src";
+} from "./testTypeExtensions";
+import type { LoginEventPayload } from "../../src";
 
 export const createLoggerService = (): LoggerService => {
   return {

@@ -29,26 +29,49 @@ export class BaseHookOrchestration implements HookOrchestration {
   public async triggerEvent<E extends RegistryEventName>(
     props: TriggerRegistryEventProps<E>,
   ): Promise<TriggerEventResult<E>> {
-    const { entriesByService, event, logger } = props;
+    const { entriesByService, event } = props;
     const { name: eventName, payload } = event;
     const tasks = this.getHookTasks({ entriesByService, eventName });
 
-    this.logTriggerStart({ logger, eventName, taskCount: tasks.length });
+    this.onTriggerStart({ eventName, tasks });
 
     const settled = await this.executeHookTasks({
-      logger,
       eventName,
       payload,
       tasks,
     });
     const failures = this.collectTriggerFailures({ eventName, settled });
 
-    this.logTriggerSummary({ logger, eventName, failures });
+    this.onTriggerComplete({ eventName, failures });
 
     return {
       eventName,
       failures,
     };
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  protected onTriggerStart<E extends RegistryEventName>(_props: {
+    eventName: E;
+    tasks: readonly HookTask<E>[];
+  }): void {
+    /* empty */
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  protected onHookTaskSuccess<E extends RegistryEventName>(_props: {
+    eventName: E;
+    task: HookTask<E>;
+  }): void {
+    /* empty */
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  protected onTriggerComplete<E extends RegistryEventName>(_props: {
+    eventName: E;
+    failures: readonly TriggerEventFailure<E>[];
+  }): void {
+    /* empty */
   }
 
   private async runWithLifecyclePolicy<E extends RegistryEventName>(props: {
@@ -104,36 +127,17 @@ export class BaseHookOrchestration implements HookOrchestration {
     return tasks;
   }
 
-  private logTriggerStart(props: {
-    logger: TriggerRegistryEventProps<RegistryEventName>["logger"];
-    eventName: RegistryEventName;
-    taskCount: number;
-  }): void {
-    const { logger, eventName, taskCount } = props;
-
-    logger?.info(
-      "ServiceRegistry",
-      `Triggering '${eventName}' for ${String(taskCount)} hook(s)`,
-    );
-  }
-
   private async executeHookTasks<E extends RegistryEventName>(props: {
-    logger: TriggerRegistryEventProps<E>["logger"];
     eventName: E;
     payload: RegistryEventPayload<E> | undefined;
     tasks: readonly HookTask<E>[];
   }): Promise<PromiseSettledResult<void>[]> {
-    const { logger, eventName, payload, tasks } = props;
+    const { eventName, payload, tasks } = props;
 
     return Promise.allSettled(
       tasks.map(async (task) => {
-        const { serviceName, hookName } = task;
-
         await this.runWithLifecyclePolicy({ task, payload });
-        logger?.debug(
-          "ServiceRegistry",
-          `Event '${eventName}' completed for service '${serviceName}' via '${hookName}'`,
-        );
+        this.onHookTaskSuccess({ eventName, task });
       }),
     );
   }
@@ -186,28 +190,6 @@ export class BaseHookOrchestration implements HookOrchestration {
       errorMessage: this.toErrorMessage(reason),
       reason,
     };
-  }
-
-  private logTriggerSummary(props: {
-    logger: TriggerRegistryEventProps<RegistryEventName>["logger"];
-    eventName: RegistryEventName;
-    failures: readonly TriggerEventFailure[];
-  }): void {
-    const { logger, eventName, failures } = props;
-
-    if (failures.length === 0) {
-      logger?.info(
-        "ServiceRegistry",
-        `Event '${eventName}' completed successfully`,
-      );
-      return;
-    }
-
-    logger?.warn(
-      "ServiceRegistry",
-      `Event '${eventName}' completed with ${String(failures.length)} failure(s)`,
-      failures,
-    );
   }
 
   private toErrorMessage(reason: unknown): string {

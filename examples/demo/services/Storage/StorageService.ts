@@ -1,5 +1,4 @@
-import type { Service } from "../Service";
-import type { LoginEventPayload } from "../../registry";
+import type { Service, LoginEventPayload } from "../../../../src";
 
 export interface StorageService extends Service {
   save: (key: string, value: string) => void;

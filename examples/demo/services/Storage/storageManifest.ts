@@ -1,4 +1,4 @@
-import { defineService } from "../../registry";
+import { defineService } from "../../../../src";
 import { BasicStorageService } from "./BasicStorageService";
 
 const serviceName = "Storage";

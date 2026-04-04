@@ -1,7 +1,7 @@
 import { AbstractLoggerService } from "../AbstractLoggerService";
 import type { LoggerService } from "../Logger";
 import type { StorageService } from "./StorageService";
-import type { LoginEventPayload } from "../../registry";
+import type { LoginEventPayload } from "../../../../src";
 
 export class BasicStorageService
   extends AbstractLoggerService

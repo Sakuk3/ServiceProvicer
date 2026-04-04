@@ -1,4 +1,4 @@
-import { defineService } from "../../registry";
+import { defineService } from "../../../../src";
 import { BasicLoggerService } from "./BasicLoggerService";
 import type { LogLevel } from "./LoggerService";
 

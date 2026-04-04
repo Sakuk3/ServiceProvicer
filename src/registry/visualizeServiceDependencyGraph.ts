@@ -175,11 +175,14 @@ export const visualizeServiceDependencyGraph = (
   console.log("Disconnected services:");
   remainingServices.forEach((serviceName, index) => {
     const serviceState = nodeStateByName.get(serviceName) ?? "unknown";
+    const serviceLabel = String(serviceName);
     const servicePrefix =
       index === remainingServices.length - 1 ? "└─ " : "├─ ";
     const childPrefix = index === remainingServices.length - 1 ? "   " : "│  ";
 
-    console.log(`${servicePrefix}${serviceName} ${toStateLabel(serviceState)}`);
+    console.log(
+      `${servicePrefix}${serviceLabel} ${toStateLabel(serviceState)}`,
+    );
     expandedServices.add(serviceName);
 
     printDependencyEdges({

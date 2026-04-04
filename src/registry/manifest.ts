@@ -1,4 +1,4 @@
-import type { Services } from "./serviceTypes";
+import type { ServiceKey, Services } from "./serviceTypes";
 import { ServiceManifestDuplicateDependenciesError } from "./errors";
 import type {
   DependencyRecord,
@@ -11,8 +11,8 @@ import type {
  * Creates a service instance once all declared dependencies are ready.
  */
 type FactoryFunction<
-  ServiceName extends keyof Services,
-  DependencyNames extends readonly (keyof Services)[],
+  ServiceName extends ServiceKey,
+  DependencyNames extends readonly ServiceKey[],
 > = (dependencies: DependencyRecord<DependencyNames>) => Services[ServiceName];
 
 /**
@@ -22,8 +22,8 @@ type FactoryFunction<
  * to `never` and the manifest fails to type-check.
  */
 type ValidDependencies<
-  ServiceName extends keyof Services,
-  DependencyNames extends readonly (keyof Services)[],
+  ServiceName extends ServiceKey,
+  DependencyNames extends readonly ServiceKey[],
 > = ServiceName extends DependencyNames[number] ? never : DependencyNames;
 
 type AsyncHookMethodKeys<T, EventName extends RegistryEventName> = {
@@ -41,7 +41,7 @@ type AsyncHookMethodKeys<T, EventName extends RegistryEventName> = {
  * Example:
  * `{ login: { method: "onLogin", retry: true } }`
  */
-export type ServiceHooks<ServiceName extends keyof Services> = Partial<{
+export type ServiceHooks<ServiceName extends ServiceKey> = Partial<{
   [EventName in RegistryEventName]: LifecycleHookPolicy & {
     method: AsyncHookMethodKeys<Services[ServiceName], EventName>;
   };
@@ -54,8 +54,8 @@ export type ServiceHooks<ServiceName extends keyof Services> = Partial<{
  * @typeParam DependencyNames - Ordered dependency names required by the service.
  */
 export interface ServiceManifest<
-  ServiceName extends keyof Services,
-  DependencyNames extends readonly (keyof Services)[],
+  ServiceName extends ServiceKey,
+  DependencyNames extends readonly ServiceKey[],
 > {
   name: ServiceName;
   /**
@@ -103,8 +103,8 @@ export interface ServiceManifest<
  * ```
  */
 export const defineService = <
-  ServiceName extends keyof Services,
-  DependencyNames extends readonly (keyof Services)[],
+  ServiceName extends ServiceKey,
+  DependencyNames extends readonly ServiceKey[],
 >(
   manifest: ServiceManifest<ServiceName, DependencyNames>,
 ) => {
@@ -121,10 +121,10 @@ export const defineService = <
 };
 
 const getDuplicateDependencies = (
-  dependencies: readonly (keyof Services)[],
-): (keyof Services)[] => {
-  const seenDependencies = new Set<keyof Services>();
-  const duplicateDependencies: (keyof Services)[] = [];
+  dependencies: readonly ServiceKey[],
+): ServiceKey[] => {
+  const seenDependencies = new Set<ServiceKey>();
+  const duplicateDependencies: ServiceKey[] = [];
 
   for (const dependencyName of dependencies) {
     if (seenDependencies.has(dependencyName)) {

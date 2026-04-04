@@ -1,4 +1,4 @@
-import { AbstractService } from "../AbstractService";
+import { AbstractService } from "../../../../src";
 import type { LogLevel, LoggerService } from "./LoggerService";
 
 const LOG_LEVEL_PRIORITY: Readonly<Record<LogLevel, number>> = {

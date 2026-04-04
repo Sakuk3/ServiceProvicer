@@ -2,6 +2,8 @@
 
 A small TypeScript service registry that wires services by dependency order and runs lifecycle hooks through a single orchestration point.
 
+The published package exposes registry primitives only. Concrete services live in consumer code (this repo keeps sample services in `examples/demo/services`).
+
 ## Why this repo exists
 
 This project is a focused reference for building modular services that:
@@ -28,12 +30,14 @@ When cycle detection fails, `registerService(...)` throws with a stable message 
 includes a `cyclePath` property to aid diagnostics, for example:
 `Auth -> Network -> Auth`.
 
-### Event typing model
+### Event and service typing model
 
-Lifecycle events are declared in `RegistryEvents` and drive both:
+Lifecycle events are declared in `RegistryEvents`, and services are declared in `Services` via interface extension (module augmentation). Together they drive:
 
 - the accepted `triggerEvent(...)` payload shape
 - the allowed hook method signatures in service manifests
+
+Repo-local example: `examples/demo/demoTypeExtensions.ts` augments both maps for the demo.
 
 ```ts
 interface RegistryEvents {
@@ -61,8 +65,11 @@ Service dependency graph (single view, service -> dependency)
 │     ├─> Logger [ready] [ref]
 │     └─> Storage [ready]
 │        └─> Logger [ready] [ref]
-└─ Notification [ready]
-   └─> Logger [ready] [ref]
+├─ Notification [ready]
+│  └─> Logger [ready] [ref]
+└─ Audit [ready]
+   ├─> Logger [ready] [ref]
+   └─> Storage [ready] [ref]
 ```
 
 ## Getting started
@@ -79,7 +86,7 @@ npm install
 npm run start
 ```
 
-This executes `examples/demo.ts`, registers the built-in service manifests, and triggers lifecycle events.
+This executes `examples/demo.ts`, registers demo-local manifests from `examples/demo/services`, and triggers lifecycle events.
 
 ### 3) Build distributable files
 
@@ -114,30 +121,45 @@ npm run pack:check
 
 ## Project layout
 
-- `src/registry` core registry types and implementation
-- `src/services` concrete service abstractions, manifests, and implementations
-- `examples` local runnable demo code excluded from the published package
+- `src/registry` core registry types and implementation (published)
+- `examples/demo/services` runnable sample service implementations/manifests (not published)
+- `examples/demo` demo wiring (`demo.ts`, hook orchestration, type extensions)
 - `test/registry` registration, hooks, and getter behavior tests
 
 ## Package usage
 
 ```ts
 import {
-  authManifest,
-  loggerManifest,
-  networkManifest,
-  notificationManifest,
-  storageManifest,
+  defineService,
   ServiceRegistry,
+  type Service,
+  type Services,
   visualizeServiceDependencyGraph,
 } from "service-provider-registry";
 
+interface LoggerService extends Service {
+  info: (scope: string, ...args: unknown[]) => void;
+}
+
+declare module "service-provider-registry/registry" {
+  interface Services {
+    Logger: LoggerService;
+  }
+}
+
+const loggerManifest = defineService({
+  name: "Logger",
+  dependencies: [] as const,
+  factory: () => {
+    return {
+      name: "Logger",
+      info: (_scope: string, ..._args: unknown[]) => {},
+    } satisfies Services["Logger"];
+  },
+});
+
 const registry = new ServiceRegistry();
 
-registry.registerService(authManifest);
-registry.registerService(notificationManifest);
-registry.registerService(networkManifest);
-registry.registerService(storageManifest);
 registry.registerService(loggerManifest);
 
 await registry.triggerEvent({
@@ -152,17 +174,37 @@ visualizeServiceDependencyGraph(registry.getDependencyGraph());
 ## Manifest example
 
 ```ts
-import { defineService } from "../registry";
-import { AbstractLoggerService } from "../AbstractLoggerService";
-import type { LoggerService } from "../Logger";
+import {
+  AbstractService,
+  defineService,
+  type Service,
+} from "service-provider-registry";
 
-class ExampleStorageService extends AbstractLoggerService {
+interface LoggerService extends Service {
+  info: (scope: string, ...args: unknown[]) => void;
+}
+
+interface StorageService extends Service {
+  clearStorage: () => Promise<void>;
+}
+
+declare module "service-provider-registry/registry" {
+  interface Services {
+    Logger: LoggerService;
+    Storage: StorageService;
+  }
+}
+
+class ExampleStorageService extends AbstractService implements StorageService {
   public constructor(name: string, loggerService: LoggerService) {
-    super(name, loggerService);
+    super(name);
+    this.loggerService = loggerService;
   }
 
+  private readonly loggerService: LoggerService;
+
   public clearStorage(): Promise<void> {
-    this.logger.info("clearStorage", "Storage cleared during logout");
+    this.loggerService.info("clearStorage", "Storage cleared during logout");
     return Promise.resolve();
   }
 }

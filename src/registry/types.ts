@@ -26,7 +26,7 @@ export type RegistryHookHandler<E extends RegistryEventName> =
 export interface TriggerEventFailure<
   E extends RegistryEventName = RegistryEventName,
 > {
-  serviceName: ServiceKey | "Unknown";
+  serviceName: string;
   hookName: string;
   eventName: E;
   timestamp: string;

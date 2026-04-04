@@ -1,4 +1,4 @@
-import { defineService } from "../../registry";
+import { defineService } from "../../../../src";
 import { BasicNetworkService } from "./BasicNetworkService";
 
 const serviceName = "Network";

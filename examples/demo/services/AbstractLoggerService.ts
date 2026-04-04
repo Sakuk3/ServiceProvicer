@@ -1,4 +1,4 @@
-import { AbstractService } from "./AbstractService";
+import { AbstractService } from "../../../src";
 import { scopedLoggerFactory } from "./Logger";
 import type { LoggerService, ScopedLogger } from "./Logger";
 
