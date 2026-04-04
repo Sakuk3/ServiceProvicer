@@ -2,11 +2,13 @@ import { describe, expect, it, vi } from "vitest";
 import {
   defineService,
   ServiceAlreadyRegisteredError,
+  ServiceDependencyNotReadyError,
   ServiceManifestDuplicateDependenciesError,
   ServiceRegistryCircularDependencyError,
   ServiceRegistryError,
   ServiceRegistry,
   type FailedServiceInfo,
+  type WaitingEntryResolution,
 } from "../../src";
 import type {
   AuthService,
@@ -339,6 +341,57 @@ describe("ServiceRegistry registration", () => {
     expect(failedAuthService.initError).toBeInstanceOf(Error);
   });
 
+  it("preserves factory error messages when marking services failed", () => {
+    const registry = new ServiceRegistry();
+    const logger = createLoggerService();
+    const wrappedFailureError = new Error("Unknown error");
+
+    registry.registerService(
+      defineService({
+        name: "Logger",
+        dependencies: [] as const,
+        factory: () => logger,
+      }),
+    );
+    registry.registerService(
+      defineService({
+        name: "Auth",
+        dependencies: ["Logger"] as const,
+        factory: () => {
+          throw new Error("factory string failure");
+        },
+      }),
+    );
+    registry.registerService(
+      defineService({
+        name: "Network",
+        dependencies: ["Logger"] as const,
+        factory: () => {
+          throw wrappedFailureError;
+        },
+      }),
+    );
+
+    const unresolvedServices = registry.getUnresolvedServices();
+    const failedAuthService = unresolvedServices.find(
+      (entry): entry is FailedServiceInfo =>
+        entry.state === "failed" && entry.name === "Auth",
+    );
+    const failedNetworkService = unresolvedServices.find(
+      (entry): entry is FailedServiceInfo =>
+        entry.state === "failed" && entry.name === "Network",
+    );
+
+    if (failedAuthService === undefined || failedNetworkService === undefined) {
+      throw new Error("Expected failed entries for Auth and Network");
+    }
+
+    expect(failedAuthService.errorMessage).toBe("factory string failure");
+    expect(failedAuthService.initError).toBeInstanceOf(Error);
+    expect(failedNetworkService.errorMessage).toBe("Unknown error");
+    expect(failedNetworkService.initError).toBe(wrappedFailureError);
+  });
+
   it("returns unresolved dependency diagnostics for waiting services", () => {
     const registry = new ServiceRegistry();
     const logger = createLoggerService();
@@ -391,5 +444,50 @@ describe("ServiceRegistry registration", () => {
       ServiceManifestDuplicateDependenciesError,
     );
     expect(invalidManifestError).toBeInstanceOf(ServiceRegistryError);
+  });
+
+  it("throws when dependency resolution is forced before dependencies are ready", () => {
+    const eagerWaitingEntryResolution: WaitingEntryResolution = {
+      canResolveWaitingEntry: () => true,
+      resolveWaitingEntry: (props) => {
+        const { serviceName, entry, createReadyHooks } = props;
+        const instance = entry.createInstance();
+
+        return {
+          state: "ready",
+          dependencies: entry.dependencies,
+          hooks: createReadyHooks({
+            serviceName,
+            instance,
+            hookPolicies: entry.hookPolicies,
+          }),
+          instance,
+        };
+      },
+    };
+    const registry = new ServiceRegistry({
+      waitingEntryResolution: eagerWaitingEntryResolution,
+    });
+
+    const thrownError = getThrownError(() => {
+      registry.registerService(
+        defineService({
+          name: "Notification",
+          dependencies: ["Logger"] as const,
+          factory: () => createNotificationService(),
+        }),
+      );
+    });
+
+    expect(thrownError).toBeInstanceOf(ServiceDependencyNotReadyError);
+    expect(thrownError.message).toBe("Dependency Logger not ready");
+
+    if (!(thrownError instanceof ServiceDependencyNotReadyError)) {
+      throw new Error(
+        "Expected dependency readiness error type for eager resolution",
+      );
+    }
+
+    expect(thrownError.dependencyName).toBe("Logger");
   });
 });

@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from "vitest";
 import {
   BaseHookOrchestration,
   defineService,
+  type HookPolicyMap,
+  type HookPolicyNormalization,
   type HookTask,
   type LoginEventPayload,
   type RegistryEventName,
@@ -81,6 +83,26 @@ class LoggerServiceHookOrchestration extends BaseHookOrchestration {
 
   public error(scope: string, ...args: unknown[]): void {
     this.logger?.error(scope, ...args);
+  }
+}
+
+class ThrowingOnSuccessHookOrchestration extends BaseHookOrchestration {
+  public constructor(reason: Error) {
+    super({ hookRetryAttempts: 1 });
+    this.reason = reason;
+  }
+
+  private readonly reason: Error;
+
+  protected override onHookTaskSuccess<E extends RegistryEventName>(props: {
+    eventName: E;
+    task: HookTask<E>;
+  }): void {
+    const { eventName, task } = props;
+
+    void eventName;
+    void task;
+    throw this.reason;
   }
 }
 
@@ -228,6 +250,122 @@ describe("ServiceRegistry hooks", () => {
     );
   });
 
+  it("does not run hooks for services that are still waiting", async () => {
+    const registry = new ServiceRegistry();
+    const loginHook = vi
+      .fn<(payload: LoginEventPayload) => Promise<void>>()
+      .mockResolvedValue();
+    const storage = createStorageService({
+      onLogin: loginHook,
+      onLogout: () => Promise.resolve(),
+    });
+
+    registry.registerService(
+      defineService({
+        name: "Storage",
+        dependencies: ["Logger"] as const,
+        hooks: {
+          login: { method: "handleLogin" },
+        },
+        factory: () => storage,
+      }),
+    );
+
+    const result = await registry.triggerEvent({
+      name: "login",
+      payload: { username: "alice" },
+    });
+
+    expect(result).toEqual({ eventName: "login", failures: [] });
+    expect(loginHook).not.toHaveBeenCalled();
+  });
+
+  it("invokes logout hooks without passing payload arguments", async () => {
+    const logger = createLoggerService();
+    const registry = createRegistryWithLoggerBehavior(logger);
+    const logoutHook = vi.fn(() => Promise.resolve());
+    const storage = createStorageService({
+      onLogin: () => Promise.resolve(),
+      onLogout: logoutHook,
+    });
+
+    registry.registerService(
+      defineService({
+        name: "Logger",
+        dependencies: [] as const,
+        factory: () => logger,
+      }),
+    );
+    registry.registerService(
+      defineService({
+        name: "Storage",
+        dependencies: ["Logger"] as const,
+        hooks: {
+          logout: { method: "handleLogout" },
+        },
+        factory: () => storage,
+      }),
+    );
+
+    const result = await registry.triggerEvent({ name: "logout" });
+
+    expect(result).toEqual({ eventName: "logout", failures: [] });
+    expect(logoutHook).toHaveBeenCalledTimes(1);
+    expect(logoutHook).toHaveBeenCalledWith();
+  });
+
+  it("skips undefined normalized hook policies", async () => {
+    const logger = createLoggerService();
+    const logoutHook = vi.fn(() => Promise.resolve());
+    const storage = createStorageService({
+      onLogin: () => Promise.resolve(),
+      onLogout: logoutHook,
+    });
+    const customHookPolicyNormalization: HookPolicyNormalization = {
+      normalizeHookPolicies: (props) => {
+        const { hooks } = props;
+
+        if (hooks === undefined) {
+          return {};
+        }
+
+        const hookPolicyMap: HookPolicyMap = {
+          login: undefined,
+          logout: { method: "handleLogout", retry: false },
+        };
+
+        return hookPolicyMap;
+      },
+    };
+    const registry = new ServiceRegistry({
+      hookPolicyNormalization: customHookPolicyNormalization,
+    });
+
+    registry.registerService(
+      defineService({
+        name: "Logger",
+        dependencies: [] as const,
+        factory: () => logger,
+      }),
+    );
+    registry.registerService(
+      defineService({
+        name: "Storage",
+        dependencies: ["Logger"] as const,
+        hooks: {
+          login: { method: "handleLogin" },
+          logout: { method: "handleLogout" },
+        },
+        factory: () => storage,
+      }),
+    );
+
+    const result = await registry.triggerEvent({ name: "logout" });
+
+    expect(result).toEqual({ eventName: "logout", failures: [] });
+    expect(logoutHook).toHaveBeenCalledTimes(1);
+  });
+
   it("handles events safely when logger service is missing", async () => {
     const registry = new ServiceRegistry();
     const storage = createStorageService({
@@ -327,6 +465,85 @@ describe("ServiceRegistry hooks", () => {
       eventName: "login",
       errorMessage: "Unknown error",
       reason: nonErrorReason,
+    });
+    expect(result.failures[0]?.timestamp).toBeTypeOf("string");
+  });
+
+  it("normalizes string hook rejection reasons to readable messages", async () => {
+    const logger = createLoggerService();
+    const registry = createRegistryWithLoggerBehavior(logger);
+    const storage = createStorageService({
+      onLogin: () => Promise.reject(new Error("string failure")),
+      onLogout: () => Promise.resolve(),
+    });
+
+    registry.registerService(
+      defineService({
+        name: "Logger",
+        dependencies: [] as const,
+        factory: () => logger,
+      }),
+    );
+    registry.registerService(
+      defineService({
+        name: "Storage",
+        dependencies: ["Logger"] as const,
+        hooks: {
+          login: { method: "handleLogin" },
+        },
+        factory: () => storage,
+      }),
+    );
+
+    const result = await registry.triggerEvent({
+      name: "login",
+      payload: { username: "alice" },
+    });
+
+    expect(result.failures).toHaveLength(1);
+    expect(result.failures[0]).toMatchObject({
+      serviceName: "Storage",
+      hookName: "handleLogin",
+      eventName: "login",
+      errorMessage: "string failure",
+    });
+    expect(result.failures[0]?.reason).toBeInstanceOf(Error);
+  });
+
+  it("maps orchestration callback failures to unknown service metadata", async () => {
+    const orchestrationReason = new Error("post-hook callback failed");
+    const hookOrchestration = new ThrowingOnSuccessHookOrchestration(
+      orchestrationReason,
+    );
+    const registry = new ServiceRegistry({ hookOrchestration });
+    const storage = createStorageService({
+      onLogin: () => Promise.resolve(),
+      onLogout: () => Promise.resolve(),
+    });
+
+    registry.registerService(
+      defineService({
+        name: "Storage",
+        dependencies: [] as const,
+        hooks: {
+          login: { method: "handleLogin" },
+        },
+        factory: () => storage,
+      }),
+    );
+
+    const result = await registry.triggerEvent({
+      name: "login",
+      payload: { username: "alice" },
+    });
+
+    expect(result.failures).toHaveLength(1);
+    expect(result.failures[0]).toMatchObject({
+      serviceName: "Unknown",
+      hookName: "unknown",
+      eventName: "login",
+      errorMessage: "post-hook callback failed",
+      reason: orchestrationReason,
     });
     expect(result.failures[0]?.timestamp).toBeTypeOf("string");
   });

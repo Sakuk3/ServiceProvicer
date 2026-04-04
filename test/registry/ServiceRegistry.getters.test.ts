@@ -10,6 +10,7 @@ import {
   createNotificationService,
   createStorageService,
 } from "./serviceTestFactories";
+import { findWaitingCyclePath } from "../../src/registry/utils/cycleDetection";
 
 describe("ServiceRegistry getters", () => {
   describe("getServiceUnsafe", () => {
@@ -265,6 +266,25 @@ describe("ServiceRegistry getters", () => {
       });
 
       expect(registry.getDependencyGraph()).toBe(expectedGraph);
+    });
+
+    it("returns no waiting cycle when the start service is ready", () => {
+      const cyclePath = findWaitingCyclePath({
+        entriesByService: new Map([
+          [
+            "Logger",
+            {
+              state: "ready",
+              dependencies: [],
+              hooks: {},
+              instance: createLoggerService(),
+            },
+          ],
+        ]),
+        startServiceName: "Logger",
+      });
+
+      expect(cyclePath).toBeUndefined();
     });
   });
 });
